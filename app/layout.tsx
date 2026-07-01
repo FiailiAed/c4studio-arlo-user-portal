@@ -33,7 +33,7 @@ export default function RootLayout({
         <ClerkProvider>
           <ConvexClientProvider>
             <header className="flex items-center justify-between px-6 py-3 border-b border-zinc-200 dark:border-zinc-800">
-              <span className="font-semibold text-sm">A.R.L.O.</span>
+              <span className="font-semibold text-sm"><a href="/">A.R.L.O.</a></span>
               <div className="flex items-center gap-3">
                 <Show when="signed-out">
                   <SignInButton />

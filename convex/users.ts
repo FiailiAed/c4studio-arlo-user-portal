@@ -14,11 +14,8 @@ export const getCurrentUser = query({
 });
 
 export const upsertUser = mutation({
-  args: {
-    firstName: v.string(),
-    lastName: v.string(),
-  },
-  handler: async (ctx, { firstName, lastName }) => {
+  args: {},
+  handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
 
@@ -31,16 +28,12 @@ export const upsertUser = mutation({
 
     return await ctx.db.insert("users", {
       clerkId: identity.subject,
-      firstName,
-      lastName,
     });
   },
 });
 
 export const updateProfile = mutation({
   args: {
-    firstName: v.optional(v.string()),
-    lastName: v.optional(v.string()),
     phone: v.optional(v.string()),
     dateOfBirth: v.optional(v.string()),
     address: v.optional(
@@ -63,13 +56,10 @@ export const updateProfile = mutation({
 
     if (!user) throw new Error("User not found");
 
-    const patch: Record<string, unknown> = {};
-    if (args.firstName !== undefined) patch.firstName = args.firstName;
-    if (args.lastName !== undefined) patch.lastName = args.lastName;
-    if (args.phone !== undefined) patch.phone = args.phone;
-    if (args.dateOfBirth !== undefined) patch.dateOfBirth = args.dateOfBirth;
-    if (args.address !== undefined) patch.address = args.address;
-
-    await ctx.db.patch(user._id, patch);
+    await ctx.db.patch(user._id, {
+      phone: args.phone,
+      dateOfBirth: args.dateOfBirth,
+      address: args.address,
+    });
   },
 });

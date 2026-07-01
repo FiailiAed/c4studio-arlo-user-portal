@@ -16,8 +16,6 @@ export default function EditProfilePage() {
   const updateProfile = useMutation(api.users.updateProfile);
 
   const [form, setForm] = useState({
-    firstName: "",
-    lastName: "",
     phone: "",
     dateOfBirth: "",
     street: "",
@@ -30,8 +28,6 @@ export default function EditProfilePage() {
   useEffect(() => {
     if (profile) {
       setForm({
-        firstName: profile.firstName,
-        lastName: profile.lastName,
         phone: profile.phone ?? "",
         dateOfBirth: profile.dateOfBirth ?? "",
         street: profile.address?.street ?? "",
@@ -52,8 +48,6 @@ export default function EditProfilePage() {
     try {
       const hasAddress = form.street || form.city || form.state || form.zip;
       await updateProfile({
-        firstName: form.firstName,
-        lastName: form.lastName,
         phone: form.phone || undefined,
         dateOfBirth: form.dateOfBirth || undefined,
         address: hasAddress
@@ -88,28 +82,6 @@ export default function EditProfilePage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Name */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="firstName">First name</Label>
-                  <Input
-                    id="firstName"
-                    value={form.firstName}
-                    onChange={set("firstName")}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="lastName">Last name</Label>
-                  <Input
-                    id="lastName"
-                    value={form.lastName}
-                    onChange={set("lastName")}
-                    required
-                  />
-                </div>
-              </div>
-
               {/* Contact */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">

@@ -17,13 +17,10 @@ export default function UserPage() {
   const upsertUser = useMutation(api.users.upsertUser);
 
   useEffect(() => {
-    if (profile === null && clerkUser) {
-      upsertUser({
-        firstName: clerkUser.firstName ?? "",
-        lastName: clerkUser.lastName ?? "",
-      });
+    if (profile === null) {
+      upsertUser({});
     }
-  }, [profile, clerkUser, upsertUser]);
+  }, [profile, upsertUser]);
 
   if (profile === undefined) {
     return (
@@ -33,13 +30,11 @@ export default function UserPage() {
     );
   }
 
-  const initials = profile
-    ? `${profile.firstName[0]}${profile.lastName[0]}`.toUpperCase()
-    : (clerkUser?.firstName?.[0] ?? "?").toUpperCase();
+  const initials = (
+    (clerkUser?.firstName?.[0] ?? "") + (clerkUser?.lastName?.[0] ?? "")
+  ).toUpperCase() || "?";
 
-  const fullName = profile
-    ? `${profile.firstName} ${profile.lastName}`
-    : clerkUser?.fullName ?? "—";
+  const fullName = clerkUser?.fullName ?? "—";
 
   return (
     <main className="flex flex-1 flex-col items-center py-12 px-4">
