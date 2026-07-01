@@ -6,10 +6,12 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { api } from "../../convex/_generated/api";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import { getRoleConfig } from "@/lib/roles";
 
 export default function UserPage() {
   const { user: clerkUser } = useUser();
@@ -29,6 +31,9 @@ export default function UserPage() {
       </div>
     );
   }
+
+  const role = clerkUser?.publicMetadata?.role as string | undefined;
+  const roleConfig = getRoleConfig(role);
 
   const initials = (
     (clerkUser?.firstName?.[0] ?? "") + (clerkUser?.lastName?.[0] ?? "")
@@ -95,6 +100,41 @@ export default function UserPage() {
                   </>
                 )}
               </dl>
+            )}
+          </CardContent>
+        </Card>
+        {/* Permissions card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Permissions</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 text-sm">
+            <div className="flex items-center gap-3">
+              <span className="text-muted-foreground">Role</span>
+              {roleConfig ? (
+                <Badge variant="secondary">{roleConfig.label}</Badge>
+              ) : (
+                <Badge variant="outline" className="text-muted-foreground">
+                  Not assigned
+                </Badge>
+              )}
+            </div>
+            {roleConfig ? (
+              <>
+                <p className="text-muted-foreground">{roleConfig.description}</p>
+                <ul className="space-y-1.5">
+                  {roleConfig.permissions.map((p) => (
+                    <li key={p} className="flex items-center gap-2 text-muted-foreground">
+                      <span className="text-foreground">✓</span>
+                      {p}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p className="text-muted-foreground">
+                No role has been assigned to your account. Contact a league admin to get access.
+              </p>
             )}
           </CardContent>
         </Card>
