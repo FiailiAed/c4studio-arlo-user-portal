@@ -28,14 +28,18 @@ export const upsertUser = mutation({
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .unique();
 
-    if (existing) return existing._id;
-
-    return await ctx.db.insert("users", {
-      clerkId: identity.subject,
+    const fields = {
       firstName: args.firstName,
       lastName: args.lastName,
       email: args.email,
-    });
+    };
+
+    if (existing) {
+      await ctx.db.patch(existing._id, fields);
+      return existing._id;
+    }
+
+    return await ctx.db.insert("users", { clerkId: identity.subject, ...fields });
   },
 });
 
@@ -75,20 +79,18 @@ export const listAll = query({
   args: {},
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Unauthorized");
+    // Return null rather than throw — Convex re-runs the query once the auth
+    // token arrives. Throwing leaves useQuery permanently errored on fast loads.
+    if (!identity) return null;
 
-    // Role comes from JWT claims (set via Clerk session token / Convex JWT template).
-    // Falling back to the DB role supports the window before the webhook has synced.
-    const jwtRole = (identity as Record<string, unknown>).metadata
-      ? ((identity as Record<string, unknown>).metadata as Record<string, unknown>)?.role
-      : undefined;
+    const jwtRole = (identity["metadata"] as { role?: string } | undefined)?.role;
 
     if (jwtRole !== "league_admin") {
       const caller = await ctx.db
         .query("users")
         .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
         .unique();
-      if (caller?.role !== "league_admin") throw new Error("Unauthorized");
+      if (caller?.role !== "league_admin") throw new Error("Forbidden");
     }
 
     return await ctx.db.query("users").collect();

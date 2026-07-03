@@ -19,14 +19,13 @@ export default function UserPage() {
   const upsertUser = useMutation(api.users.upsertUser);
 
   useEffect(() => {
-    if (profile === null && clerkUser) {
-      upsertUser({
-        firstName: clerkUser.firstName ?? undefined,
-        lastName: clerkUser.lastName ?? undefined,
-        email: clerkUser.primaryEmailAddress?.emailAddress,
-      });
-    }
-  }, [profile, clerkUser, upsertUser]);
+    if (!clerkUser) return;
+    upsertUser({
+      firstName: clerkUser.firstName ?? undefined,
+      lastName: clerkUser.lastName ?? undefined,
+      email: clerkUser.primaryEmailAddress?.emailAddress,
+    });
+  }, [clerkUser?.id, upsertUser]);
 
   if (profile === undefined) {
     return (

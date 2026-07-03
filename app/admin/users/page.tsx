@@ -30,7 +30,7 @@ export default function AdminUsersPage() {
     }
   }
 
-  if (users === undefined) {
+  if (users === undefined || users === null) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <p className="text-muted-foreground text-sm">Loading...</p>
