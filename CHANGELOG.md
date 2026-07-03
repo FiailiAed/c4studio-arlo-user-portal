@@ -4,6 +4,25 @@ Project history is tracked through git branches. Each branch represents a featur
 
 ---
 
+## Branch: `feat/admin-user-search` (merged)
+
+**Status**: Merged into `development` via PR #5. Branch deleted from GitHub. Not yet merged to `main`.
+
+**Purpose**: Add search to the admin user table and improve the loading UX across the app.
+
+### What was built
+
+- **`app/admin/users/page.tsx`** — Added a search input filtering the user list by first name, last name, or email (client-side, case-insensitive substring match). "Select all" now scopes to the currently visible (filtered) rows, and the card title shows an `(N of M)` count while a search is active.
+- **`components/ui/arlo-loader.tsx`** — New shared loading component: an animated "arlo" wordmark using a Tailwind-only wipe/blur effect (mask + `@keyframes` defined in `app/globals.css` as `arlo-wipe` and `arlo-blur`, referenced via Tailwind arbitrary `[animation:...]` syntax).
+- **`app/user/page.tsx`, `app/user/edit/page.tsx`, `app/admin/users/page.tsx`** — Replaced plain "Loading..." text with `<ArloLoader />`.
+- **`app/admin/loader/page.tsx`** — New `league_admin`-gated page (via existing `/admin/*` proxy guard) that renders only `ArloLoader`, indefinitely — useful as a standalone loading/holding screen.
+
+### Known issue
+
+- **`ArloLoader` animation does not render** — the page loads and shows the static "arlo" wordmark, but the wipe/blur animation isn't visibly playing. Root cause not yet identified; suspect the Tailwind arbitrary `[animation:...]` value (two comma-separated animations, each with a `cubic-bezier(...)` function call) may not be parsing/generating correctly under Tailwind v4's arbitrary-value syntax. Needs follow-up investigation — try verifying the generated CSS output, or fall back to a `<style jsx>`/plain CSS class if the arbitrary-value approach proves unreliable.
+
+---
+
 ## Branch: `feat/admin-role-management` (merged)
 
 **Status**: Merged into `development` and confirmed working on the Vercel development deployment. Branch deleted from GitHub. Not yet merged to `main`.
