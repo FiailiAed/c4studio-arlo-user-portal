@@ -98,9 +98,11 @@ if (!identity) return null; // NOT throw new Error("Unauthorized")
 │   ├── ConvexClientProvider.tsx
 │   ├── page.tsx                # / redirects to /dashboard
 │   ├── dashboard/
-│   │   ├── page.tsx            # Post-login landing page for all roles — calls upsertUser on every login,
-│   │   │                       # shows shared profile/permissions + role-specific section (league_admin
-│   │   │                       # gets a live user-count widget; other roles get a "coming soon" placeholder)
+│   │   └── page.tsx            # Post-login landing page for all roles — calls upsertUser on every login;
+│   │                           # dynamic, role-specific content only (league_admin gets a live user-count
+│   │                           # widget; other roles get a "coming soon" placeholder). No profile info here.
+│   ├── user/
+│   │   ├── page.tsx            # Read-only Profile Details + Permissions ("My Profile" link in header)
 │   │   └── edit/page.tsx       # Edit phone/DOB/address (Clerk owns name/email)
 │   ├── admin/
 │   │   ├── loader/page.tsx     # Standalone ArloLoader screen (league_admin only)
@@ -125,8 +127,8 @@ if (!identity) return null; // NOT throw new Error("Unauthorized")
 | firstName, lastName | Clerk | Read via `useUser()` / `currentUser()` |
 | email | Clerk | Read via `useUser()` / `currentUser()` |
 | password | Clerk | Never touch |
-| role | Clerk `publicMetadata.role` | Cached/denormalized in Convex `users.role` — **`users.role` is the canonical read source in the app** (e.g. `/dashboard`); Clerk's client-side `publicMetadata.role` can lag a fresh admin role change until the session JWT refreshes |
-| phone, dateOfBirth, address | Convex | League-specific data, edited via `/dashboard/edit` |
+| role | Clerk `publicMetadata.role` | Cached/denormalized in Convex `users.role` — **`users.role` is the canonical read source in the app** (e.g. `/dashboard`, `/user`); Clerk's client-side `publicMetadata.role` can lag a fresh admin role change until the session JWT refreshes |
+| phone, dateOfBirth, address | Convex | League-specific data, viewed on `/user`, edited via `/user/edit` |
 
 Convex caches `firstName`, `lastName`, `email`, `role` from Clerk for admin queries. These are synced:
 - On every `/dashboard` page load (`upsertUser` mutation patches the record)
