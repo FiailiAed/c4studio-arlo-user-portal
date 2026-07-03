@@ -2,7 +2,7 @@
 
 import { useQuery } from "convex/react";
 import { useMemo, useState } from "react";
-import { api } from "../../../convex/_generated/api";
+import { api } from "../../../../convex/_generated/api";
 import { ArloLoader } from "@/components/ui/arlo-loader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
