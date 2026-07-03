@@ -64,7 +64,7 @@ Both tokens must include `"metadata": "{{user.public_metadata}}"` for role check
 
 **Role update flow**: `POST /api/users/role` (server route) → `clerkClient().users.updateUser()` → Clerk fires `user.updated` webhook → Convex HTTP action → `syncFromWebhook` internalMutation patches `users.role`.
 
-Webhook not yet registered as of this writing — see Pending Work below.
+Webhook is registered and live (`/clerk-webhook` on Convex). Required `CLERK_WEBHOOK_SECRET` to be set both in `.env.local` **and** in the Convex dashboard's environment variables — missing it on the Convex side was why the webhook initially failed.
 
 ---
 
@@ -107,8 +107,7 @@ if (!identity) return null; // NOT throw new Error("Unauthorized")
 │   ├── schema.ts               # users table
 │   ├── users.ts                # getCurrentUser, upsertUser, updateProfile, listAll, syncFromWebhook
 │   ├── http.ts                 # Clerk webhook handler at /clerk-webhook
-│   ├── auth.config.ts          # Links to Clerk JWT template "convex"
-│   └── migrations.ts           # TEMPORARY — setRole migration; delete after webhook is live
+│   └── auth.config.ts          # Links to Clerk JWT template "convex"
 └── lib/
     └── roles.ts                # AppRole type + getRoleConfig()
 ```
@@ -170,6 +169,7 @@ users: defineTable({
 | `listAll` "Unauthorized" on fast loads | Convex query threw before auth token arrived → stuck error state | Return `null` instead of throwing when `!identity` |
 | Admin table empty (no names/emails) | `upsertUser` returned early on existing records without updating | Changed to always patch `firstName`/`lastName`/`email`; effect runs every login |
 | Debug route breaks production build | Top-level `throw` evaluated at build time | Never use top-level throws for env guards; gate inside the handler |
+| Clerk webhook returned 400/failed silently | `CLERK_WEBHOOK_SECRET` was only set in `.env.local`, not in Convex's own environment variables (Convex HTTP actions run in Convex's environment, not Next.js's) | Add the secret to the Convex dashboard env vars too |
 
 ---
 
@@ -193,12 +193,4 @@ Same vars needed in Vercel environment variables (except `CONVEX_DEPLOYMENT` is 
 
 ## Pending Work
 
-1. **Register Clerk webhook** — not yet done. Until then, roles only sync to Convex when users visit `/user`.
-   - Clerk Dashboard → Webhooks → Add Endpoint
-   - URL: `https://calculating-eel-369.convex.site/clerk-webhook`
-   - Events: `user.created`, `user.updated`
-   - Copy Signing Secret → add `CLERK_WEBHOOK_SECRET` to `.env.local` and Vercel
-
-2. **Delete `convex/migrations.ts`** — temporary file used to seed the DB role manually. Delete after webhook is live and all user roles are synced properly.
-
-3. **Delete `adminrolemanagement.patch`** from project root — leftover patch file, not source code.
+All items from the original list are complete: the Clerk webhook is registered and live, `CLERK_WEBHOOK_SECRET` is set in both `.env.local` and the Convex dashboard, `convex/migrations.ts` has been deleted, and `adminrolemanagement.patch` was already removed. Branch `feat/admin-role-management` is ready to merge to `main` pending final review.

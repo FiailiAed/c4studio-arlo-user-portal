@@ -9,7 +9,7 @@ export default clerkMiddleware(async (auth, request) => {
   await auth.protect();
   if (isAdminRoute(request)) {
     const { sessionClaims } = await auth();
-    const role = (sessionClaims as any)?.metadata?.role;
+    const role = (sessionClaims?.metadata as { role?: string } | undefined)?.role;
     if (role !== "league_admin") {
       return NextResponse.redirect(new URL("/user", request.url));
     }
