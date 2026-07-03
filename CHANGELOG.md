@@ -4,9 +4,9 @@ Project history is tracked through git branches. Each branch represents a featur
 
 ---
 
-## Branch: `feat/admin-role-management`
+## Branch: `feat/admin-role-management` (merged)
 
-**Status**: Cleanup complete — ready for review, not yet merged to `main`
+**Status**: Merged into `development` and confirmed working on the Vercel development deployment. Branch deleted from GitHub. Not yet merged to `main`.
 
 **Purpose**: Allow league admins to assign roles to users from within the app instead of the Clerk Dashboard.
 
@@ -19,6 +19,7 @@ Project history is tracked through git branches. Each branch represents a featur
 - **`proxy.ts`** — Added `/admin/*` route guard. Redirects non-`league_admin` users to `/user`.
 - **`convex/schema.ts`** — Added `email` and `role` fields to the `users` table.
 - **`lib/roles.ts`** — Single source of truth for `AppRole` type and role config (label, description, permissions list).
+- **Batch role editing** — `app/admin/users/page.tsx` now has per-row and select-all checkboxes with a bulk action bar to apply one role to multiple selected users at once. `app/api/users/role/route.ts` accepts `userIds: string[]` and updates Clerk in parallel.
 
 ### Bugs fixed during this branch
 
@@ -34,7 +35,7 @@ Project history is tracked through git branches. Each branch represents a featur
 - `convex/migrations.ts` (temporary seed migration) deleted now that the webhook reliably keeps Convex in sync.
 - `adminrolemanagement.patch` was already absent from the repo root.
 
-Branch is ready for final review and merge to `main`.
+Merged into `development` on 2026-07-03; ready to promote to `main` when the team decides.
 
 ---
 
