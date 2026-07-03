@@ -60,7 +60,7 @@ export default function EditProfilePage() {
             }
           : undefined,
       });
-      router.push("/user");
+      router.push("/dashboard");
     } finally {
       setSaving(false);
     }
@@ -158,7 +158,7 @@ export default function EditProfilePage() {
                 <Button
                   type="button"
                   variant="ghost"
-                  onClick={() => router.push("/user")}
+                  onClick={() => router.push("/dashboard")}
                 >
                   Cancel
                 </Button>

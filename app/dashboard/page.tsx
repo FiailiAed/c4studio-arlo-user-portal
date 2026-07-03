@@ -9,12 +9,12 @@ import { ArloLoader } from "@/components/ui/arlo-loader";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { getRoleConfig } from "@/lib/roles";
+import { DASHBOARD_PLACEHOLDERS, getRoleConfig, type AppRole } from "@/lib/roles";
 
-export default function UserPage() {
+export default function DashboardPage() {
   const { user: clerkUser } = useUser();
   const profile = useQuery(api.users.getCurrentUser);
   const upsertUser = useMutation(api.users.upsertUser);
@@ -36,7 +36,7 @@ export default function UserPage() {
     );
   }
 
-  const role = clerkUser?.publicMetadata?.role as string | undefined;
+  const role = profile?.role as AppRole | undefined;
   const roleConfig = getRoleConfig(role);
 
   const initials = (
@@ -68,7 +68,7 @@ export default function UserPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">Profile Details</CardTitle>
-            <Link href="/user/edit" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+            <Link href="/dashboard/edit" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
               Edit
             </Link>
           </CardHeader>
@@ -76,7 +76,7 @@ export default function UserPage() {
             {!profile || (!profile.phone && !profile.dateOfBirth && !profile.address) ? (
               <p className="text-muted-foreground">
                 No profile details yet.{" "}
-                <Link href="/user/edit" className="underline underline-offset-4">
+                <Link href="/dashboard/edit" className="underline underline-offset-4">
                   Complete your profile
                 </Link>
               </p>
@@ -142,7 +142,70 @@ export default function UserPage() {
             )}
           </CardContent>
         </Card>
+
+        {role === "league_admin" ? <AdminOverviewCard /> : <RolePlaceholderCard role={role} />}
       </div>
     </main>
+  );
+}
+
+function RolePlaceholderCard({ role }: { role: AppRole | undefined }) {
+  const placeholder = role && role !== "league_admin" ? DASHBOARD_PLACEHOLDERS[role] : undefined;
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle className="text-base">{placeholder?.title ?? "Dashboard"}</CardTitle>
+          <CardDescription>
+            {placeholder?.description ?? "Contact a league admin to get a role assigned to your account."}
+          </CardDescription>
+        </div>
+        {placeholder && <Badge variant="secondary">Coming Soon</Badge>}
+      </CardHeader>
+    </Card>
+  );
+}
+
+function AdminOverviewCard() {
+  const allUsers = useQuery(api.users.listAll);
+
+  if (!allUsers) return null;
+
+  const counts: Record<AppRole, number> = {
+    family: 0,
+    referee: 0,
+    program_admin: 0,
+    league_admin: 0,
+  };
+  let unassigned = 0;
+  for (const u of allUsers) {
+    if (u.role && u.role in counts) counts[u.role as AppRole]++;
+    else unassigned++;
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">League Overview</CardTitle>
+        <CardDescription>{allUsers.length} total users</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          {(Object.keys(counts) as AppRole[]).map((r) => (
+            <div key={r} className="flex items-center justify-between rounded-md border px-3 py-2">
+              <span className="text-muted-foreground">{getRoleConfig(r)?.label ?? r}</span>
+              <Badge variant="secondary">{counts[r]}</Badge>
+            </div>
+          ))}
+          {unassigned > 0 && (
+            <div className="flex items-center justify-between rounded-md border px-3 py-2">
+              <span className="text-muted-foreground">Unassigned</span>
+              <Badge variant="outline">{unassigned}</Badge>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
