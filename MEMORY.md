@@ -99,14 +99,18 @@ if (!identity) return null; // NOT throw new Error("Unauthorized")
 │   ├── page.tsx                # / redirects to /dashboard
 │   ├── dashboard/
 │   │   └── page.tsx            # Post-login landing page for all roles — calls upsertUser on every login;
-│   │                           # dynamic, role-specific content only (league_admin gets a live user-count
-│   │                           # widget; other roles get a "coming soon" placeholder). No profile info here.
+│   │                           # dynamic, role-specific content only (league_admin gets an "Open Admin
+│   │                           # Dashboard" link card; other roles get a "coming soon" placeholder). No
+│   │                           # profile info and no admin stats here — see /admin for those.
 │   ├── user/
 │   │   ├── page.tsx            # Read-only Profile Details + Permissions ("My Profile" link in header)
 │   │   └── edit/page.tsx       # Edit phone/DOB/address (Clerk owns name/email)
 │   ├── admin/
-│   │   ├── loader/page.tsx     # Standalone ArloLoader screen (league_admin only)
-│   │   └── users/page.tsx      # Role management table (league_admin only)
+│   │   ├── (dashboard)/        # Route group — shares a Dashboard/Users nav layout; doesn't affect URLs
+│   │   │   ├── layout.tsx      # Admin nav (Dashboard | Users tabs), excludes /admin/loader on purpose
+│   │   │   ├── page.tsx        # /admin — League Overview stats widget + "Manage Users" quick-link card
+│   │   │   └── users/page.tsx  # /admin/users — Role management table (league_admin only)
+│   │   └── loader/page.tsx     # Standalone ArloLoader screen (league_admin only, no nav wrapper)
 │   └── api/
 │       └── users/role/route.ts # Server route: update Clerk publicMetadata.role
 ├── convex/

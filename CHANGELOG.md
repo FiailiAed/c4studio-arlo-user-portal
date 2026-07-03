@@ -4,6 +4,26 @@ Project history is tracked through git branches. Each branch represents a featur
 
 ---
 
+## Branch: `feat/admin-dashboard`
+
+**Status**: In progress — open PR, not yet merged to `development`.
+
+**Purpose**: Give `/admin` a real landing page (stats + quick links), add nav between admin pages, and stop `/dashboard` from duplicating admin stats.
+
+### What was built
+
+- **`app/admin/(dashboard)/page.tsx`** (new, route is `/admin`) — League Overview widget (total users + per-role breakdown, moved from `/dashboard`'s old `AdminOverviewCard`, reusing the existing `listAll` query — no new Convex code) plus a "Manage Users" quick-link card to `/admin/users`.
+- **`app/admin/(dashboard)/layout.tsx`** (new) — Shared nav (Dashboard/Users tabs, active-tab highlighting via `usePathname`) for the admin section. Implemented as a Next.js route group so `/admin/loader` — a standalone full-screen `ArloLoader` demo — stays outside it and isn't wrapped by the nav.
+- **`app/admin/users/page.tsx` → `app/admin/(dashboard)/users/page.tsx`** — Moved into the route group to share the nav layout; only the relative import path depth changed.
+- **`app/dashboard/page.tsx`** — Removed the `AdminOverviewCard` stats widget for `league_admin`; replaced with a simple "Open Admin Dashboard" link card to `/admin`, so admin stats live in one place instead of two.
+
+### Notes
+
+- No Convex schema or query changes — purely a UI/routing reorganization.
+- No `proxy.ts` changes needed — `/admin(.*)` was already gated to `league_admin`, redirecting elsewhere to `/dashboard`.
+
+---
+
 ## Branch: `feat/user-dashboard`
 
 **Status**: In progress — open PR, not yet merged to `development`.
