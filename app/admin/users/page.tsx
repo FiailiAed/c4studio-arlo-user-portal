@@ -1,11 +1,13 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { api } from "../../../convex/_generated/api";
+import { ArloLoader } from "@/components/ui/arlo-loader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { getRoleConfig, type AppRole } from "@/lib/roles";
 
 const ROLES: AppRole[] = ["family", "referee", "program_admin", "league_admin"];
@@ -17,6 +19,17 @@ export default function AdminUsersPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkRole, setBulkRole] = useState<AppRole | "">("");
   const [bulkApplying, setBulkApplying] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const filteredUsers = useMemo(() => {
+    if (!users) return users;
+    const query = search.trim().toLowerCase();
+    if (!query) return users;
+    return users.filter((user) => {
+      const haystack = [user.firstName, user.lastName, user.email].filter(Boolean).join(" ").toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [users, search]);
 
   async function applyRole(clerkIds: string[], role: AppRole) {
     setOptimisticRoles((prev) => {
@@ -77,14 +90,24 @@ export default function AdminUsersPage() {
   }
 
   function toggleSelectAll() {
-    if (!users) return;
-    setSelected((prev) => (prev.size === users.length ? new Set() : new Set(users.map((u) => u.clerkId))));
+    if (!filteredUsers || filteredUsers.length === 0) return;
+    const visibleIds = filteredUsers.map((u) => u.clerkId);
+    const allVisibleSelected = visibleIds.every((id) => selected.has(id));
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) {
+        for (const id of visibleIds) next.delete(id);
+      } else {
+        for (const id of visibleIds) next.add(id);
+      }
+      return next;
+    });
   }
 
-  if (users === undefined || users === null) {
+  if (users === undefined || users === null || filteredUsers === undefined || filteredUsers === null) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <p className="text-muted-foreground text-sm">Loading...</p>
+        <ArloLoader />
       </div>
     );
   }
@@ -93,6 +116,15 @@ export default function AdminUsersPage() {
     <main className="flex flex-1 flex-col items-center py-12 px-4">
       <div className="w-full max-w-4xl space-y-6">
         <h1 className="text-2xl font-semibold">User Management</h1>
+
+        <Input
+          type="search"
+          placeholder="Search by name or email…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="max-w-sm"
+          aria-label="Search users"
+        />
 
         {selected.size > 0 && (
           <div className="flex items-center gap-3 rounded-md border bg-muted/50 px-4 py-3">
@@ -120,7 +152,9 @@ export default function AdminUsersPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">All Users</CardTitle>
+            <CardTitle className="text-base">
+              All Users {search.trim() && `(${filteredUsers.length} of ${users.length})`}
+            </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <table className="w-full text-sm">
@@ -129,7 +163,7 @@ export default function AdminUsersPage() {
                   <th className="px-6 py-3 font-medium">
                     <input
                       type="checkbox"
-                      checked={users.length > 0 && selected.size === users.length}
+                      checked={filteredUsers.length > 0 && filteredUsers.every((u) => selected.has(u.clerkId))}
                       onChange={toggleSelectAll}
                       aria-label="Select all users"
                     />
@@ -142,7 +176,7 @@ export default function AdminUsersPage() {
                 </tr>
               </thead>
               <tbody>
-                {users.map((user) => {
+                {filteredUsers.map((user) => {
                   const displayRole = (optimisticRoles[user.clerkId] ?? user.role) as AppRole | undefined;
                   const roleConfig = getRoleConfig(displayRole);
                   return (
@@ -187,10 +221,10 @@ export default function AdminUsersPage() {
                     </tr>
                   );
                 })}
-                {users.length === 0 && (
+                {filteredUsers.length === 0 && (
                   <tr>
                     <td colSpan={6} className="px-6 py-6 text-center text-muted-foreground">
-                      No users found.
+                      {search.trim() ? "No users match your search." : "No users found."}
                     </td>
                   </tr>
                 )}

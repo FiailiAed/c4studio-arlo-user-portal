@@ -5,6 +5,7 @@ import { useUser } from "@clerk/nextjs";
 import { useEffect } from "react";
 import Link from "next/link";
 import { api } from "../../convex/_generated/api";
+import { ArloLoader } from "@/components/ui/arlo-loader";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -30,7 +31,7 @@ export default function UserPage() {
   if (profile === undefined) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <p className="text-muted-foreground text-sm">Loading...</p>
+        <ArloLoader />
       </div>
     );
   }
