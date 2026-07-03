@@ -26,6 +26,17 @@ export default function AdminPage() {
             </Link>
           </CardHeader>
         </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-base">Invite Users</CardTitle>
+              <CardDescription>Send a role-scoped email invitation.</CardDescription>
+            </div>
+            <Link href="/admin/invite" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+              Open
+            </Link>
+          </CardHeader>
+        </Card>
       </div>
     </main>
   );

@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 const ADMIN_NAV = [
   { href: "/admin", label: "Dashboard" },
   { href: "/admin/users", label: "Users" },
+  { href: "/admin/invite", label: "Invite" },
 ] as const;
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
