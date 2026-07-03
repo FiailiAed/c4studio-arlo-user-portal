@@ -4,9 +4,9 @@ Project history is tracked through git branches. Each branch represents a featur
 
 ---
 
-## Branch: `feat/admin-role-management`
+## Branch: `feat/admin-role-management` (merged)
 
-**Status**: In progress — open PR, not yet merged to `main`
+**Status**: Merged into `development` and confirmed working on the Vercel development deployment. Branch deleted from GitHub. Not yet merged to `main`.
 
 **Purpose**: Allow league admins to assign roles to users from within the app instead of the Clerk Dashboard.
 
@@ -19,27 +19,23 @@ Project history is tracked through git branches. Each branch represents a featur
 - **`proxy.ts`** — Added `/admin/*` route guard. Redirects non-`league_admin` users to `/user`.
 - **`convex/schema.ts`** — Added `email` and `role` fields to the `users` table.
 - **`lib/roles.ts`** — Single source of truth for `AppRole` type and role config (label, description, permissions list).
-- **`convex/migrations.ts`** — Temporary. `setRole` internalMutation used to manually seed the DB role while webhook is not yet registered.
+- **Batch role editing** — `app/admin/users/page.tsx` now has per-row and select-all checkboxes with a bulk action bar to apply one role to multiple selected users at once. `app/api/users/role/route.ts` accepts `userIds: string[]` and updates Clerk in parallel.
 
 ### Bugs fixed during this branch
 
 - **Intermittent "Unauthorized" on `/admin/users`** (1-in-5 load rate): `listAll` was throwing when `getUserIdentity()` returned null during the Convex auth token initialization race. Fixed by returning `null` instead of throwing — Convex re-runs the query when the token arrives.
 - **Admin table showing no user data**: `upsertUser` was returning early on existing records without updating fields. Fixed to always patch `firstName`/`lastName`/`email`. Effect in `app/user/page.tsx` now runs on every login (not just when `profile === null`).
 - **Debug route breaking production build**: A top-level `throw` in `app/api/debug/user-tokens/route.ts` was evaluated at build time by Turbopack. Route was removed entirely.
+- **`any` types in `app/api/users/role/route.ts` and `convex/http.ts`**: Both cast Clerk claim/webhook payloads through `any`, violating the project's strict-TypeScript rule. Replaced with a typed `{ role?: AppRole }` cast for session claims and a `ClerkUserEvent` interface for the webhook payload.
+- **Clerk webhook failing silently**: Registered in the Clerk Dashboard but `CLERK_WEBHOOK_SECRET` was only set in `.env.local`, not in Convex's own environment variables — Convex HTTP actions run in Convex's environment, not Next.js's. Added the secret to the Convex dashboard.
 
-### Known issue / pending
+### Completed
 
-- **Clerk webhook not yet registered**. `convex/http.ts` is implemented and deployed to Convex, but the Clerk Dashboard webhook endpoint has not been created yet. Until it is:
-  - Role changes in the admin UI write to Clerk immediately but only sync to Convex DB after the user visits `/user` (triggering `upsertUser`).
-  - New users won't have their Convex records created until they visit `/user`.
-  - `convex/migrations.ts` (temporary) was used to manually seed the DB role for the developer's own account.
+- Clerk webhook registered and confirmed working end-to-end (`user.created` / `user.updated` → Convex sync).
+- `convex/migrations.ts` (temporary seed migration) deleted now that the webhook reliably keeps Convex in sync.
+- `adminrolemanagement.patch` was already absent from the repo root.
 
-**To complete this branch**:
-1. Register webhook in Clerk Dashboard (see `MEMORY.md` → Pending Work)
-2. Add `CLERK_WEBHOOK_SECRET` to `.env.local` and Vercel
-3. Delete `convex/migrations.ts`
-4. Delete `adminrolemanagement.patch` from project root
-5. Merge to `main`
+Merged into `development` on 2026-07-03; ready to promote to `main` when the team decides.
 
 ---
 

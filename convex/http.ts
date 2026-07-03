@@ -5,6 +5,17 @@ import { internal } from "./_generated/api";
 
 const http = httpRouter();
 
+interface ClerkUserEvent {
+  type: string;
+  data: {
+    id: string;
+    first_name?: string | null;
+    last_name?: string | null;
+    email_addresses?: { email_address: string }[];
+    public_metadata?: { role?: string };
+  };
+}
+
 http.route({
   path: "/clerk-webhook",
   method: "POST",
@@ -14,13 +25,13 @@ http.route({
 
     const body = await request.text();
     const wh = new Webhook(secret);
-    let event: any;
+    let event: ClerkUserEvent;
     try {
       event = wh.verify(body, {
         "svix-id": request.headers.get("svix-id") ?? "",
         "svix-timestamp": request.headers.get("svix-timestamp") ?? "",
         "svix-signature": request.headers.get("svix-signature") ?? "",
-      });
+      }) as ClerkUserEvent;
     } catch {
       return new Response("Invalid signature", { status: 400 });
     }
