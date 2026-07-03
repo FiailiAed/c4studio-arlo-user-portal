@@ -4,6 +4,7 @@ import { useQuery } from "convex/react";
 import { useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getRoleConfig, type AppRole } from "@/lib/roles";
 
@@ -13,21 +14,71 @@ export default function AdminUsersPage() {
   const users = useQuery(api.users.listAll);
   const [optimisticRoles, setOptimisticRoles] = useState<Record<string, AppRole>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkRole, setBulkRole] = useState<AppRole | "">("");
+  const [bulkApplying, setBulkApplying] = useState(false);
 
-  async function handleRoleChange(clerkId: string, role: AppRole) {
-    setOptimisticRoles((prev) => ({ ...prev, [clerkId]: role }));
-    setErrors((prev) => { const next = { ...prev }; delete next[clerkId]; return next; });
+  async function applyRole(clerkIds: string[], role: AppRole) {
+    setOptimisticRoles((prev) => {
+      const next = { ...prev };
+      for (const id of clerkIds) next[id] = role;
+      return next;
+    });
+    setErrors((prev) => {
+      const next = { ...prev };
+      for (const id of clerkIds) delete next[id];
+      return next;
+    });
 
     const res = await fetch("/api/users/role", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: clerkId, role }),
+      body: JSON.stringify({ userIds: clerkIds, role }),
     });
 
     if (!res.ok) {
-      setErrors((prev) => ({ ...prev, [clerkId]: "Failed to update role" }));
-      setOptimisticRoles((prev) => { const next = { ...prev }; delete next[clerkId]; return next; });
+      setErrors((prev) => {
+        const next = { ...prev };
+        for (const id of clerkIds) next[id] = "Failed to update role";
+        return next;
+      });
+      setOptimisticRoles((prev) => {
+        const next = { ...prev };
+        for (const id of clerkIds) delete next[id];
+        return next;
+      });
     }
+
+    return res.ok;
+  }
+
+  function handleRoleChange(clerkId: string, role: AppRole) {
+    applyRole([clerkId], role);
+  }
+
+  async function handleBulkApply() {
+    if (!bulkRole || selected.size === 0) return;
+    setBulkApplying(true);
+    const ok = await applyRole(Array.from(selected), bulkRole);
+    setBulkApplying(false);
+    if (ok) {
+      setSelected(new Set());
+      setBulkRole("");
+    }
+  }
+
+  function toggleSelected(clerkId: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(clerkId)) next.delete(clerkId);
+      else next.add(clerkId);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (!users) return;
+    setSelected((prev) => (prev.size === users.length ? new Set() : new Set(users.map((u) => u.clerkId))));
   }
 
   if (users === undefined || users === null) {
@@ -42,6 +93,31 @@ export default function AdminUsersPage() {
     <main className="flex flex-1 flex-col items-center py-12 px-4">
       <div className="w-full max-w-4xl space-y-6">
         <h1 className="text-2xl font-semibold">User Management</h1>
+
+        {selected.size > 0 && (
+          <div className="flex items-center gap-3 rounded-md border bg-muted/50 px-4 py-3">
+            <span className="text-sm font-medium">{selected.size} selected</span>
+            <select
+              value={bulkRole}
+              onChange={(e) => setBulkRole(e.target.value as AppRole)}
+              className="rounded-md border border-input bg-background px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring/50"
+            >
+              <option value="" disabled>Select role…</option>
+              {ROLES.map((r) => (
+                <option key={r} value={r}>
+                  {getRoleConfig(r)?.label ?? r}
+                </option>
+              ))}
+            </select>
+            <Button size="sm" disabled={!bulkRole || bulkApplying} onClick={handleBulkApply}>
+              {bulkApplying ? "Applying…" : "Apply to selected"}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
+              Clear
+            </Button>
+          </div>
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle className="text-base">All Users</CardTitle>
@@ -50,6 +126,14 @@ export default function AdminUsersPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-muted-foreground">
+                  <th className="px-6 py-3 font-medium">
+                    <input
+                      type="checkbox"
+                      checked={users.length > 0 && selected.size === users.length}
+                      onChange={toggleSelectAll}
+                      aria-label="Select all users"
+                    />
+                  </th>
                   <th className="px-6 py-3 font-medium">First Name</th>
                   <th className="px-6 py-3 font-medium">Last Name</th>
                   <th className="px-6 py-3 font-medium">Email</th>
@@ -63,6 +147,14 @@ export default function AdminUsersPage() {
                   const roleConfig = getRoleConfig(displayRole);
                   return (
                     <tr key={user._id} className="border-b last:border-0">
+                      <td className="px-6 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(user.clerkId)}
+                          onChange={() => toggleSelected(user.clerkId)}
+                          aria-label={`Select ${user.firstName ?? user.clerkId}`}
+                        />
+                      </td>
                       <td className="px-6 py-3">{user.firstName ?? <span className="text-muted-foreground">—</span>}</td>
                       <td className="px-6 py-3">{user.lastName ?? <span className="text-muted-foreground">—</span>}</td>
                       <td className="px-6 py-3">{user.email ?? <span className="text-muted-foreground">—</span>}</td>
@@ -97,7 +189,7 @@ export default function AdminUsersPage() {
                 })}
                 {users.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-6 py-6 text-center text-muted-foreground">
+                    <td colSpan={6} className="px-6 py-6 text-center text-muted-foreground">
                       No users found.
                     </td>
                   </tr>
