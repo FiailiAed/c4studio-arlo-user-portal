@@ -23,6 +23,7 @@ export async function POST(request: Request) {
       publicMetadata: { role },
       notify: true,
       ignoreExisting: false,
+      redirectUrl: new URL("/sign-up", request.url).toString(),
     });
     return Response.json({ id: invitation.id, emailAddress: invitation.emailAddress });
   } catch (err) {
