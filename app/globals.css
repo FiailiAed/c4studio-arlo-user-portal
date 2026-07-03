@@ -128,3 +128,24 @@
     @apply font-sans;
   }
 }
+
+@keyframes arlo-wipe {
+  0% {
+    -webkit-mask-position: 150% 0;
+    mask-position: 150% 0;
+  }
+  100% {
+    -webkit-mask-position: -150% 0;
+    mask-position: -150% 0;
+  }
+}
+
+@keyframes arlo-blur {
+  0%,
+  100% {
+    filter: blur(0px);
+  }
+  50% {
+    filter: blur(3px);
+  }
+}
