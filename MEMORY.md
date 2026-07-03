@@ -106,11 +106,9 @@ if (!identity) return null; // NOT throw new Error("Unauthorized")
 │   │   ├── page.tsx            # Read-only Profile Details + Permissions ("My Profile" link in header)
 │   │   └── edit/page.tsx       # Edit phone/DOB/address (Clerk owns name/email)
 │   ├── admin/
-│   │   ├── (dashboard)/        # Route group — shares a Dashboard/Users nav layout; doesn't affect URLs
-│   │   │   ├── layout.tsx      # Admin nav (Dashboard | Users tabs), excludes /admin/loader on purpose
-│   │   │   ├── page.tsx        # /admin — League Overview stats widget + "Manage Users" quick-link card
-│   │   │   └── users/page.tsx  # /admin/users — Role management table (league_admin only)
-│   │   └── loader/page.tsx     # Standalone ArloLoader screen (league_admin only, no nav wrapper)
+│   │   ├── layout.tsx          # Admin nav (Dashboard | Users tabs), active-tab highlighting via usePathname
+│   │   ├── page.tsx            # /admin — League Overview stats widget + "Manage Users" quick-link card
+│   │   └── users/page.tsx      # /admin/users — Role management table (league_admin only)
 │   └── api/
 │       └── users/role/route.ts # Server route: update Clerk publicMetadata.role
 ├── convex/

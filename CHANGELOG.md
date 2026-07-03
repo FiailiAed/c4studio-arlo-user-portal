@@ -12,10 +12,10 @@ Project history is tracked through git branches. Each branch represents a featur
 
 ### What was built
 
-- **`app/admin/(dashboard)/page.tsx`** (new, route is `/admin`) — League Overview widget (total users + per-role breakdown, moved from `/dashboard`'s old `AdminOverviewCard`, reusing the existing `listAll` query — no new Convex code) plus a "Manage Users" quick-link card to `/admin/users`.
-- **`app/admin/(dashboard)/layout.tsx`** (new) — Shared nav (Dashboard/Users tabs, active-tab highlighting via `usePathname`) for the admin section. Implemented as a Next.js route group so `/admin/loader` — a standalone full-screen `ArloLoader` demo — stays outside it and isn't wrapped by the nav.
-- **`app/admin/users/page.tsx` → `app/admin/(dashboard)/users/page.tsx`** — Moved into the route group to share the nav layout; only the relative import path depth changed.
+- **`app/admin/page.tsx`** (new, route is `/admin`) — League Overview widget (total users + per-role breakdown, moved from `/dashboard`'s old `AdminOverviewCard`, reusing the existing `listAll` query — no new Convex code) plus a "Manage Users" quick-link card to `/admin/users`.
+- **`app/admin/layout.tsx`** (new) — Shared nav (Dashboard/Users tabs, active-tab highlighting via `usePathname`) for the admin section.
 - **`app/dashboard/page.tsx`** — Removed the `AdminOverviewCard` stats widget for `league_admin`; replaced with a simple "Open Admin Dashboard" link card to `/admin`, so admin stats live in one place instead of two.
+- **`app/admin/loader/`** — Removed entirely (no longer needed). It briefly existed inside a `(dashboard)` route group so the admin nav wouldn't wrap it; once the page itself was deleted, the route group was flattened back to a plain `app/admin/layout.tsx`/`page.tsx`/`users/page.tsx` structure.
 
 ### Notes
 
