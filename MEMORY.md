@@ -62,7 +62,9 @@ Both tokens must include `"metadata": "{{user.public_metadata}}"` for role check
 "family" | "referee" | "program_admin" | "league_admin"
 ```
 
-**Role update flow**: `POST /api/users/role` (server route) → `clerkClient().users.updateUser()` → Clerk fires `user.updated` webhook → Convex HTTP action → `syncFromWebhook` internalMutation patches `users.role`.
+**Role update flow (existing user)**: `POST /api/users/role` (server route) → `clerkClient().users.updateUser()` → Clerk fires `user.updated` webhook → Convex HTTP action → `syncFromWebhook` internalMutation patches `users.role`.
+
+**Role pre-assignment flow (new user via invite)**: `POST /api/users/invite` (server route) → `clerkClient().invitations.createInvitation({ emailAddress, publicMetadata: { role } })` → Clerk emails the invite → on acceptance/signup, Clerk automatically copies the invitation's `publicMetadata` onto the new `User.publicMetadata` → Clerk fires `user.created` (same webhook as above) → `syncFromWebhook` picks up `role` with zero extra Convex code. No admin follow-up needed after the invite is sent.
 
 Webhook is registered and live (`/clerk-webhook` on Convex). Required `CLERK_WEBHOOK_SECRET` to be set both in `.env.local` **and** in the Convex dashboard's environment variables — missing it on the Convex side was why the webhook initially failed.
 
@@ -106,11 +108,13 @@ if (!identity) return null; // NOT throw new Error("Unauthorized")
 │   │   ├── page.tsx            # Read-only Profile Details + Permissions ("My Profile" link in header)
 │   │   └── edit/page.tsx       # Edit phone/DOB/address (Clerk owns name/email)
 │   ├── admin/
-│   │   ├── layout.tsx          # Admin nav (Dashboard | Users tabs), active-tab highlighting via usePathname
-│   │   ├── page.tsx            # /admin — League Overview stats widget + "Manage Users" quick-link card
-│   │   └── users/page.tsx      # /admin/users — Role management table (league_admin only)
+│   │   ├── layout.tsx          # Admin nav (Dashboard | Users | Invite tabs), active-tab via usePathname
+│   │   ├── page.tsx            # /admin — League Overview widget + "Manage Users"/"Invite Users" quick links
+│   │   ├── users/page.tsx      # /admin/users — Role management table (league_admin only)
+│   │   └── invite/page.tsx     # /admin/invite — Send a Clerk email invite with a pre-assigned role
 │   └── api/
-│       └── users/role/route.ts # Server route: update Clerk publicMetadata.role
+│       ├── users/role/route.ts   # Server route: update Clerk publicMetadata.role
+│       └── users/invite/route.ts # Server route: create a Clerk invitation with publicMetadata.role preset
 ├── convex/
 │   ├── schema.ts               # users table
 │   ├── users.ts                # getCurrentUser, upsertUser, updateProfile, listAll, syncFromWebhook

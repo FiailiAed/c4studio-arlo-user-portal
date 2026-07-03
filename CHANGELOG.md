@@ -16,6 +16,8 @@ Project history is tracked through git branches. Each branch represents a featur
 - **`app/admin/layout.tsx`** (new) — Shared nav (Dashboard/Users tabs, active-tab highlighting via `usePathname`) for the admin section.
 - **`app/dashboard/page.tsx`** — Removed the `AdminOverviewCard` stats widget for `league_admin`; replaced with a simple "Open Admin Dashboard" link card to `/admin`, so admin stats live in one place instead of two.
 - **`app/admin/loader/`** — Removed entirely (no longer needed). It briefly existed inside a `(dashboard)` route group so the admin nav wouldn't wrap it; once the page itself was deleted, the route group was flattened back to a plain `app/admin/layout.tsx`/`page.tsx`/`users/page.tsx` structure.
+- **`app/api/users/invite/route.ts`** (new) — `league_admin`-only route that calls `clerkClient().invitations.createInvitation({ emailAddress, publicMetadata: { role } })`. Clerk emails the invite and, on acceptance, automatically copies that `publicMetadata` onto the new user — the existing `user.created` webhook then syncs `role` into Convex with no new backend code. Returns 403 (wrong role), 400 (invalid email/role), or 409 (duplicate invite/existing account).
+- **`app/admin/invite/page.tsx`** (new, route is `/admin/invite`) — Email + role form posting to the new route, with inline success/duplicate/error states. Added to the admin nav (`app/admin/layout.tsx`) and as a third quick-link card on `/admin`.
 
 ### Notes
 
