@@ -1,8 +1,7 @@
 "use client";
 
-import { useQuery, useMutation } from "convex/react";
+import { useQuery } from "convex/react";
 import { useUser } from "@clerk/nextjs";
-import { useEffect } from "react";
 import Link from "next/link";
 import { api } from "../../convex/_generated/api";
 import { ArloLoader } from "@/components/ui/arlo-loader";
@@ -12,21 +11,11 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { getRoleConfig } from "@/lib/roles";
+import { getRoleConfig, type AppRole } from "@/lib/roles";
 
 export default function UserPage() {
   const { user: clerkUser } = useUser();
   const profile = useQuery(api.users.getCurrentUser);
-  const upsertUser = useMutation(api.users.upsertUser);
-
-  useEffect(() => {
-    if (!clerkUser) return;
-    upsertUser({
-      firstName: clerkUser.firstName ?? undefined,
-      lastName: clerkUser.lastName ?? undefined,
-      email: clerkUser.primaryEmailAddress?.emailAddress,
-    });
-  }, [clerkUser?.id, upsertUser]);
 
   if (profile === undefined) {
     return (
@@ -36,7 +25,7 @@ export default function UserPage() {
     );
   }
 
-  const role = clerkUser?.publicMetadata?.role as string | undefined;
+  const role = profile?.role as AppRole | undefined;
   const roleConfig = getRoleConfig(role);
 
   const initials = (
@@ -107,6 +96,7 @@ export default function UserPage() {
             )}
           </CardContent>
         </Card>
+
         {/* Permissions card */}
         <Card>
           <CardHeader>

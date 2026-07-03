@@ -40,6 +40,7 @@ export default function RootLayout({
                   <SignUpButton />
                 </Show>
                 <Show when="signed-in">
+                  <a href="/user">My Profile</a>
                   <UserButton />
                 </Show>
               </div>

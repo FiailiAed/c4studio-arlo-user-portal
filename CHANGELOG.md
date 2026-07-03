@@ -4,6 +4,28 @@ Project history is tracked through git branches. Each branch represents a featur
 
 ---
 
+## Branch: `feat/user-dashboard`
+
+**Status**: In progress — open PR, not yet merged to `development`.
+
+**Purpose**: Introduce a `/dashboard` route as the post-login landing page, showing dynamic, role-specific content. Static profile information moves to its own `/user` (read-only) and `/user/edit` (edit) pages, linked from a new "My Profile" link in the header.
+
+### What was built
+
+- **`app/dashboard/page.tsx`** (new landing page, replaces `/user` as the `/` redirect target) — Shows only dynamic, role-specific content: `AdminOverviewCard` for `league_admin` (reuses the existing `listAll` query to show a live total-user-count and per-role breakdown, no new Convex query needed) or `RolePlaceholderCard` for `family`/`referee`/`program_admin` (a "coming soon" card, since no backend data models exist yet for those features in this repo). Still runs the `upsertUser` sync-on-login effect. Role is read from the canonical Convex `profile.role` (via the existing `getCurrentUser` query) rather than Clerk's client-cached `publicMetadata.role`, avoiding a stale-JWT edge case right after a role change.
+- **`app/user/page.tsx`** (new, read-only) — Avatar/name/email header, read-only Profile Details (phone/DOB/address), and the Permissions card (role badge + description + permissions list). Links to `/user/edit`.
+- **`app/user/edit/page.tsx`** (unchanged content, still exists) — The phone/DOB/address edit form; save/cancel now return to `/user` instead of the old `/user` (pre-dashboard) or the previously-attempted `/dashboard/edit`.
+- **`lib/roles.ts`** — Added `DASHBOARD_PLACEHOLDERS`, a `Record<Exclude<AppRole, "league_admin">, { title, description }>` map, typed so adding a new `AppRole` without updating it is a compile error.
+- **`proxy.ts`, `app/page.tsx`** — Redirect targets point to `/dashboard` (not `/user`).
+- **`app/layout.tsx`** — Added a "My Profile" link in the signed-in header pointing to `/user`.
+
+### Notes
+
+- No Convex schema or query changes — this was UI/routing work only.
+- Mid-branch correction: an earlier version of this work folded the profile/permissions UI into `/dashboard` and moved profile editing to `/dashboard/edit`, treating `/dashboard` as a full replacement for `/user`. That was wrong — `/dashboard` is for dynamic, role-specific content only; profile details/permissions belong on their own `/user` and `/user/edit` pages. Corrected before merge.
+
+---
+
 ## Branch: `feat/admin-user-search` (merged)
 
 **Status**: Merged into `development` via PR #5. Branch deleted from GitHub. Not yet merged to `main`.

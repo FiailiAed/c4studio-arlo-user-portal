@@ -44,3 +44,21 @@ export function getRoleConfig(role: string | undefined) {
   if (!role || !(role in ROLE_CONFIG)) return null;
   return ROLE_CONFIG[role as AppRole];
 }
+
+export const DASHBOARD_PLACEHOLDERS: Record<
+  Exclude<AppRole, "league_admin">,
+  { title: string; description: string }
+> = {
+  family: {
+    title: "Player Registrations",
+    description: "Manage your players' registrations here soon.",
+  },
+  referee: {
+    title: "Game Schedules",
+    description: "View and manage your game assignments soon.",
+  },
+  program_admin: {
+    title: "Program Rosters",
+    description: "Manage your program's rosters soon.",
+  },
+};
