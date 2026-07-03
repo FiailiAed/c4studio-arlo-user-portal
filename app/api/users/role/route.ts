@@ -5,7 +5,7 @@ const VALID_ROLES: AppRole[] = ["family", "referee", "program_admin", "league_ad
 
 export async function POST(request: Request) {
   const { sessionClaims } = await auth();
-  const callerRole = (sessionClaims as any)?.metadata?.role;
+  const callerRole = (sessionClaims?.metadata as { role?: AppRole } | undefined)?.role;
   if (callerRole !== "league_admin") {
     return new Response("Forbidden", { status: 403 });
   }
