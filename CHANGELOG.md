@@ -4,6 +4,26 @@ Project history is tracked through git branches. Each branch represents a featur
 
 ---
 
+## Branch: `feat/user-dashboard`
+
+**Status**: In progress — open PR, not yet merged to `development`.
+
+**Purpose**: Introduce a single `/dashboard` route that all authenticated roles land on post-login, replacing `/user`, with content that adapts to the viewer's role.
+
+### What was built
+
+- **`app/user/page.tsx` → `app/dashboard/page.tsx`, `app/user/edit/page.tsx` → `app/dashboard/edit/page.tsx`** — Moved (not duplicated). All existing profile/permissions/edit content preserved.
+- **`app/dashboard/page.tsx`** — Role is now read from the canonical Convex `profile.role` (via the existing `getCurrentUser` query) instead of Clerk's client-cached `publicMetadata.role`, avoiding a stale-JWT edge case right after a role change. Added two local components: `AdminOverviewCard` (league_admin only — reuses the existing `listAll` query to show a live total-user-count and per-role breakdown, no new Convex query needed) and `RolePlaceholderCard` (family/referee/program_admin — shows a role-specific "coming soon" card, since no backend data models exist yet for those features in this repo).
+- **`lib/roles.ts`** — Added `DASHBOARD_PLACEHOLDERS`, a `Record<Exclude<AppRole, "league_admin">, { title, description }>` map, typed so adding a new `AppRole` without updating it is a compile error.
+- **`proxy.ts`, `app/page.tsx`** — Updated redirect targets from `/user` to `/dashboard`.
+
+### Notes
+
+- No Convex schema or query changes — this was UI/routing work only.
+- No backwards-compat redirect was kept at `/user`; the old route was moved, not aliased.
+
+---
+
 ## Branch: `feat/admin-user-search` (merged)
 
 **Status**: Merged into `development` via PR #5. Branch deleted from GitHub. Not yet merged to `main`.

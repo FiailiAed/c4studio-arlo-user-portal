@@ -96,10 +96,14 @@ if (!identity) return null; // NOT throw new Error("Unauthorized")
 ├── app/
 │   ├── layout.tsx              # ClerkProvider > ConvexClientProvider > header
 │   ├── ConvexClientProvider.tsx
-│   ├── user/
-│   │   ├── page.tsx            # User profile — calls upsertUser on every login
+│   ├── page.tsx                # / redirects to /dashboard
+│   ├── dashboard/
+│   │   ├── page.tsx            # Post-login landing page for all roles — calls upsertUser on every login,
+│   │   │                       # shows shared profile/permissions + role-specific section (league_admin
+│   │   │                       # gets a live user-count widget; other roles get a "coming soon" placeholder)
 │   │   └── edit/page.tsx       # Edit phone/DOB/address (Clerk owns name/email)
 │   ├── admin/
+│   │   ├── loader/page.tsx     # Standalone ArloLoader screen (league_admin only)
 │   │   └── users/page.tsx      # Role management table (league_admin only)
 │   └── api/
 │       └── users/role/route.ts # Server route: update Clerk publicMetadata.role
@@ -109,7 +113,7 @@ if (!identity) return null; // NOT throw new Error("Unauthorized")
 │   ├── http.ts                 # Clerk webhook handler at /clerk-webhook
 │   └── auth.config.ts          # Links to Clerk JWT template "convex"
 └── lib/
-    └── roles.ts                # AppRole type + getRoleConfig()
+    └── roles.ts                # AppRole type, getRoleConfig(), DASHBOARD_PLACEHOLDERS
 ```
 
 ---
@@ -121,11 +125,11 @@ if (!identity) return null; // NOT throw new Error("Unauthorized")
 | firstName, lastName | Clerk | Read via `useUser()` / `currentUser()` |
 | email | Clerk | Read via `useUser()` / `currentUser()` |
 | password | Clerk | Never touch |
-| role | Clerk `publicMetadata.role` | Cached/denormalized in Convex `users.role` |
-| phone, dateOfBirth, address | Convex | League-specific data, edited via `/user/edit` |
+| role | Clerk `publicMetadata.role` | Cached/denormalized in Convex `users.role` — **`users.role` is the canonical read source in the app** (e.g. `/dashboard`); Clerk's client-side `publicMetadata.role` can lag a fresh admin role change until the session JWT refreshes |
+| phone, dateOfBirth, address | Convex | League-specific data, edited via `/dashboard/edit` |
 
 Convex caches `firstName`, `lastName`, `email`, `role` from Clerk for admin queries. These are synced:
-- On every `/user` page load (`upsertUser` mutation patches the record)
+- On every `/dashboard` page load (`upsertUser` mutation patches the record)
 - Via Clerk webhook on `user.created` / `user.updated` (when registered)
 
 ---
@@ -153,7 +157,7 @@ users: defineTable({
 
 `proxy.ts` protects routes:
 - All routes require auth (except `/sign-in`, `/sign-up`)
-- `/admin/*` requires `sessionClaims.metadata.role === "league_admin"` — redirects to `/user` otherwise
+- `/admin/*` requires `sessionClaims.metadata.role === "league_admin"` — redirects to `/dashboard` otherwise
 
 ---
 
