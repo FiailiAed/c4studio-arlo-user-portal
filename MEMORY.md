@@ -117,9 +117,9 @@ if (!identity) return null; // NOT throw new Error("Unauthorized")
 │   │   ├── page.tsx            # Read-only Profile Details + Permissions ("My Profile" link in header)
 │   │   └── edit/page.tsx       # Edit phone/DOB/address (Clerk owns name/email)
 │   ├── admin/
-│   │   ├── layout.tsx          # Admin nav (Dashboard | Users | Invite | Data tabs), active-tab via usePathname
+│   │   ├── layout.tsx          # Left sidebar nav (Dashboard | Users | Invite | Data), mobile hamburger overlay
 │   │   ├── page.tsx            # /admin — League Overview widget + "Manage Users"/"Invite Users" quick links
-│   │   ├── users/page.tsx      # /admin/users — Role management, Delete, Impersonate (super_admin only)
+│   │   ├── users/page.tsx      # /admin/users — Role management, Delete, Impersonate (super_admin only), DataTable
 │   │   ├── invite/page.tsx     # /admin/invite — Send a Clerk email invite with a pre-assigned role
 │   │   └── data/                # /admin/data — league_admin-defined custom data tables (sandbox, not type-safe)
 │   │       ├── page.tsx        # List of tables + "New Table" builder dialog
@@ -136,6 +136,8 @@ if (!identity) return null; // NOT throw new Error("Unauthorized")
 │       └── admin/exit-impersonation/route.ts # Server route: creates a normal sign-in ticket back to auth().actor.sub
 ├── components/
 │   ├── impersonation-banner.tsx # "Viewing as X" banner + exit flow, shown whenever useAuth().actor is set
+│   ├── address-autocomplete.tsx # Google Places autocomplete for the Street field on /user/edit
+│   ├── ui/data-table.tsx       # Generic responsive table: desktop <table> + mobile card-per-row view
 │   └── players/
 │       └── player-form.tsx     # Shared create/edit player form (mode: "create" | "edit")
 ├── convex/
@@ -248,6 +250,7 @@ impersonationEvents: defineTable({
 | `convex/_generated/api.d.ts` out of sync after adding a new Convex module | Isolated agent worktrees for `feat/admin-custom-data`/`feat/player-registration` had no `.env.local`/Convex deploy credentials, so `bunx convex codegen` couldn't run there | In the main working directory (with real `.env.local`/`CONVEX_DEPLOYMENT`), `bunx convex codegen` works and pushes schema changes to the real dev deployment — prefer this over hand-editing the generated file when credentials are available |
 | Invite emails linked to Clerk's hosted Account Portal (`*.accounts.dev/sign-up`) instead of our app | `createInvitation` was called without `redirectUrl`, so Clerk fell back to its default Account Portal domain | Pass `redirectUrl: new URL("/sign-up", request.url).toString()` — Clerk appends the invitation ticket, and `<SignUp />` on our `/sign-up` page handles ticket-based sign-up automatically |
 | Impersonation redirected to Clerk's hosted Account Portal (`*.accounts.dev/default-redirect`) instead of `/dashboard` | `actorTokens.create()` has no `redirectUrl` param (unlike `createInvitation`), so `actorToken.url` defaults to the Account Portal | Ignore `actorToken.url`; build a same-app URL from the raw `actorToken.token` instead: `new URL("/sign-in", request.url)` + `?__clerk_ticket=<token>` |
+| Recurring: isolated worktree agents branch off a stale ancestor instead of the actual `development` tip (has happened repeatedly — `feat/admin-custom-data`'s first attempt, one of `feat/ui-ux-fixes`'s four sub-tasks) | Each fresh worktree's initial checkout snapshot can predate recent merges; an agent that doesn't verify against `origin/development` before branching inherits the wrong base | **Before merging any worktree-agent branch**, run `git diff origin/development origin/<branch> --stat` and sanity-check the file count/deletions — a huge unexpected deletion count means the branch is based on something stale. Never trust an agent's self-report that it "reset onto the correct base"; verify the actual diff yourself. If wrong, extract just the genuinely new files/diffs and reapply them directly on the correct base rather than merging the branch |
 | `super_admin` got "Forbidden" from `listAll` on `/admin` despite the role existing | Adding a new role tier only updated page-level gates (`proxy.ts`, dashboard pages); the actual Convex-side `league_admin`-only checks in `convex/users.ts`/`convex/customTables.ts` and the API routes' `VALID_ROLES` arrays were missed | `grep -rn '"league_admin"'` across the whole repo and update every match, not just route guards |
 | Impersonation "succeeded" (redirected into the app) but the admin was still signed in as themselves, not the target | Clerk silently ignores a sign-in ticket (`__clerk_ticket`) when a session is already active — redeeming into a *different* session while one exists requires Clerk's paid multi-session feature | Call `clerk.signOut()` client-side before navigating to the ticket URL, both entering and exiting impersonation; exit uses a separate normal `signInTokens.createSignInToken()` ticket (not another actor token) for `auth().actor.sub` to get back into the admin's own account — no multi-session needed either way |
 
@@ -266,6 +269,7 @@ Never commit `.env*` files. Required variables:
 - `NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in`
 - `NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up`
 - `CLERK_WEBHOOK_SECRET` (add when webhook is registered)
+- `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (for address autocomplete on `/user/edit` — see `components/address-autocomplete.tsx`; requires a Google Cloud project with the Places API enabled, an API key restricted to this app's HTTP referrers, and billing enabled on the project even for free-tier usage. Optional at runtime — the address field degrades to a plain text input with no suggestions if unset, no crash.)
 
 Same vars needed in Vercel environment variables (except `CONVEX_DEPLOYMENT` is replaced by Convex's Vercel integration).
 

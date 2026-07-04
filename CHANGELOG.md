@@ -4,9 +4,30 @@ Project history is tracked through git branches. Each branch represents a featur
 
 ---
 
-## Branch: `feat/user-impersonation`
+## Branch: `feat/ui-ux-fixes`
 
 **Status**: In progress — not yet merged.
+
+**Purpose**: Clean up five UI/UX issues that accumulated across recent feature branches. Built as four independent sub-tasks (disjoint files) via parallel isolated agents, then merged into this branch.
+
+### What was built
+
+- **`components/ui/data-table.tsx`** (new) — Generic `DataTable<T>` component: desktop view wraps the existing `<table>` markup in `overflow-x-auto` (fixes actions-column clipping on `/admin/users`, where the Impersonate/Delete buttons were previously inaccessible with no way to scroll to them); mobile view (`md:hidden`) renders one `Card` per row with label/value pairs and full-width stacked action buttons — a deliberate "power user" mobile answer (dense, scannable fields + full-width tap targets) rather than a shrunk table or horizontal scroll. Applied to `app/admin/users/page.tsx` and `app/admin/data/[tableId]/page.tsx` (the two real data tables in the app; `/players` already used a card grid and is unaffected) with zero changes to existing state/handler logic — only how rows render.
+- **`app/admin/layout.tsx`** — Converted from a horizontal top nav bar to a standard admin-dashboard left sidebar (`hidden md:flex md:w-56 md:flex-col md:border-r`, vertical `ADMIN_NAV` links). On mobile, the sidebar is replaced by a slim top bar with a hamburger button (`lucide-react`'s `Menu`/`X` icons, already a dependency) that opens a fixed-overlay nav panel; tapping a link or the backdrop closes it.
+- **`app/api/admin/exit-impersonation/route.ts`** — Exiting impersonation now redirects to `/admin/users` (where a `super_admin` would typically have clicked "Impersonate" from) instead of `/dashboard`. Entering impersonation is unchanged — still targets `/dashboard`.
+- **`components/address-autocomplete.tsx`** (new) — Google Places Autocomplete for the Street field on `/user/edit`, the only existing address form in the app. Loads the Google Maps JS API `places` library via `next/script` using `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` — no new npm dependency, just the script tag plus a small locally-typed interface for the parts of `window.google.maps.places` actually used (zero `any`). Falls back to a plain working text input when the key is unset (no crash, no broken page). Selecting a suggestion auto-fills street/city/state/zip; City/State/Zip remain manually editable afterward.
+
+### Notes
+
+- **Setup required, not yet done**: add a real `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` to `.env.local` (and Vercel) for autocomplete to actually show suggestions. Requires a Google Cloud project with the Places API enabled, an API key restricted to this app's HTTP referrers, and billing enabled on the project (required even within the free tier).
+- One sub-task's isolated worktree branched off a very stale ancestor (predating the admin dashboard, custom data, players, and impersonation work entirely) instead of the current `development` tip — merging it as pushed would have deleted ~2700 lines of already-merged functionality. Caught during review before merging; the genuine new content (`components/address-autocomplete.tsx` and the `app/user/edit/page.tsx` wiring) was extracted and reapplied directly on the correct base instead of merging the branch itself.
+- Manual browser testing still needed: resize to ~375px and desktop widths on `/admin/users`, `/admin/data/[tableId]`, and all `/admin/*` pages (sidebar/hamburger behavior); click through impersonate/exit to confirm the new landing pages; test address autocomplete once a real API key is configured.
+
+---
+
+## Branch: `feat/user-impersonation` (merged)
+
+**Status**: Merged into `development` via PR #10.
 
 **Purpose**: Let a new `super_admin` role (strict superset of `league_admin`, plus impersonation — no target restrictions, no reason field, per explicit product decision) sign in as any other user for support purposes, using Clerk's native Actor Token API rather than a custom session-swap.
 
