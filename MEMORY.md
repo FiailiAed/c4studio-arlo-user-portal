@@ -211,4 +211,4 @@ Same vars needed in Vercel environment variables (except `CONVEX_DEPLOYMENT` is 
 
 All items from the original `feat/admin-role-management` list are complete: the Clerk webhook is registered and live, `CLERK_WEBHOOK_SECRET` is set in both `.env.local` and the Convex dashboard, `convex/migrations.ts` has been deleted, and `adminrolemanagement.patch` was already removed.
 
-**One manual Clerk Dashboard step still needed** (not code — from `feat/admin-dashboard`'s delete-users work): enable the `user.deleted` event on the existing `/clerk-webhook` subscription (Clerk Dashboard → Webhooks → the existing endpoint → add event type). Until this is done, deleting a user via `/admin/users` removes them from Clerk immediately but leaves a stale row in Convex `users` until manually cleaned up.
+`user.deleted` has been enabled on the existing `/clerk-webhook` subscription and end-to-end deletion (Clerk account removed → Convex `users` row removed via `deleteByClerkId`) has been confirmed working. No outstanding manual steps.

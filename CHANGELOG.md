@@ -31,7 +31,7 @@ Project history is tracked through git branches. Each branch represents a featur
 
 - No Convex schema changes — `deleteByClerkId` uses the existing `users` table/index.
 - No `proxy.ts` changes needed — `/admin(.*)` was already gated to `league_admin`, redirecting elsewhere to `/dashboard`.
-- **Manual step required, not yet done**: enable `user.deleted` on the existing Clerk webhook subscription in the dashboard (see `MEMORY.md` → Pending Work) — without it, deletions remove the Clerk account but leave a stale Convex row.
+- `user.deleted` has been enabled on the Clerk webhook subscription and end-to-end deletion confirmed working (Clerk account removed → Convex row removed).
 
 ---
 
