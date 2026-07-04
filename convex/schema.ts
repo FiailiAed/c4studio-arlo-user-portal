@@ -19,4 +19,14 @@ export default defineSchema({
       })
     ),
   }).index("by_clerk_id", ["clerkId"]),
+
+  players: defineTable({
+    guardianClerkId: v.string(),
+    firstName: v.string(),
+    lastName: v.string(),
+    dateOfBirth: v.string(),
+    gender: v.optional(v.string()),
+    school: v.optional(v.string()),
+    grade: v.optional(v.string()),
+  }).index("by_guardian", ["guardianClerkId"]),
 });
