@@ -6,6 +6,7 @@ import { api } from "../../../../convex/_generated/api";
 import { ArloLoader } from "@/components/ui/arlo-loader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import {
   Dialog,
   DialogContent,
@@ -15,7 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import type { Id } from "../../../../convex/_generated/dataModel";
+import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 
 type ColumnType = "text" | "number" | "date" | "boolean" | "select";
 type FieldValue = string | number | boolean | undefined;
@@ -309,6 +310,12 @@ export default function AdminDataTablePage({
     }
   }
 
+  const recordColumns: DataTableColumn<Doc<"customRecords">>[] = columns.map((col) => ({
+    key: col.key,
+    header: col.label,
+    render: (record) => renderCellValue(col, (record.data as Record<string, unknown>)[col.key]),
+  }));
+
   return (
     <main className="flex flex-1 flex-col items-center py-12 px-4">
       <div className="w-full max-w-5xl space-y-6">
@@ -391,54 +398,32 @@ export default function AdminDataTablePage({
             </Button>
           </CardHeader>
           <CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  {columns.map((col) => (
-                    <th key={col.key} className="px-6 py-3 font-medium">
-                      {col.label}
-                    </th>
-                  ))}
-                  <th className="px-6 py-3 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {records.map((record) => (
-                  <tr key={record._id} className="border-b last:border-0">
-                    {columns.map((col) => (
-                      <td key={col.key} className="px-6 py-3">
-                        {renderCellValue(col, (record.data as Record<string, unknown>)[col.key])}
-                      </td>
-                    ))}
-                    <td className="px-6 py-3 space-x-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => openEditRecord(record._id, record.data as Record<string, unknown>)}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() =>
-                          setPendingDelete({ kind: "record", recordId: record._id, label: `record ${record._id}` })
-                        }
-                      >
-                        Delete
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-                {records.length === 0 && (
-                  <tr>
-                    <td colSpan={columns.length + 1} className="px-6 py-6 text-center text-muted-foreground">
-                      No records yet.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+            <DataTable
+              columns={recordColumns}
+              rows={records}
+              getRowKey={(record) => record._id}
+              emptyMessage="No records yet."
+              renderActions={(record) => (
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => openEditRecord(record._id, record.data as Record<string, unknown>)}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() =>
+                      setPendingDelete({ kind: "record", recordId: record._id, label: `record ${record._id}` })
+                    }
+                  >
+                    Delete
+                  </Button>
+                </div>
+              )}
+            />
           </CardContent>
         </Card>
       </div>
