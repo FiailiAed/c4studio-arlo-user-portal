@@ -52,4 +52,10 @@ export default defineSchema({
     tableId: v.id("tableDefinitions"),
     data: v.record(v.string(), v.any()), // columnKey -> value
   }).index("by_table", ["tableId"]),
+
+  impersonationEvents: defineTable({
+    adminClerkId: v.string(),
+    targetClerkId: v.string(),
+    startedAt: v.number(),
+  }).index("by_admin", ["adminClerkId"]).index("by_target", ["targetClerkId"]),
 });

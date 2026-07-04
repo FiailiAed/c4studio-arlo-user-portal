@@ -1,4 +1,4 @@
-export type AppRole = "family" | "referee" | "program_admin" | "league_admin";
+export type AppRole = "family" | "referee" | "program_admin" | "league_admin" | "super_admin";
 
 const ROLE_CONFIG: Record<AppRole, { label: string; description: string; permissions: string[] }> = {
   family: {
@@ -38,6 +38,14 @@ const ROLE_CONFIG: Record<AppRole, { label: string; description: string; permiss
       "Access all reports",
     ],
   },
+  super_admin: {
+    label: "Super Admin",
+    description: "Full league admin access, plus the ability to impersonate any account.",
+    permissions: [
+      "All League Admin permissions",
+      "Impersonate any user account",
+    ],
+  },
 };
 
 export function getRoleConfig(role: string | undefined) {
@@ -46,7 +54,7 @@ export function getRoleConfig(role: string | undefined) {
 }
 
 export const DASHBOARD_PLACEHOLDERS: Record<
-  Exclude<AppRole, "league_admin" | "family">,
+  Exclude<AppRole, "league_admin" | "family" | "super_admin">,
   { title: string; description: string }
 > = {
   referee: {

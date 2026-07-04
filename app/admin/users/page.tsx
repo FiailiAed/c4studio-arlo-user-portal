@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { useUser } from "@clerk/nextjs";
+import { useClerk, useUser } from "@clerk/nextjs";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { api } from "../../../convex/_generated/api";
@@ -21,11 +21,14 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { getRoleConfig, type AppRole } from "@/lib/roles";
 
-const ROLES: AppRole[] = ["family", "referee", "program_admin", "league_admin"];
+const ROLES: AppRole[] = ["family", "referee", "program_admin", "league_admin", "super_admin"];
 
 export default function AdminUsersPage() {
   const { user: currentUser } = useUser();
+  const clerk = useClerk();
   const users = useQuery(api.users.listAll);
+  const myProfile = useQuery(api.users.getCurrentUser);
+  const myRole = myProfile?.role as AppRole | undefined;
   const [optimisticRoles, setOptimisticRoles] = useState<Record<string, AppRole>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -35,6 +38,8 @@ export default function AdminUsersPage() {
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [pendingDelete, setPendingDelete] = useState<{ clerkId: string; label: string } | null>(null);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const [pendingImpersonate, setPendingImpersonate] = useState<{ clerkId: string; label: string } | null>(null);
+  const [impersonateSubmitting, setImpersonateSubmitting] = useState(false);
 
   const filteredUsers = useMemo(() => {
     if (!users) return users;
@@ -151,6 +156,39 @@ export default function AdminUsersPage() {
 
     setDeleteSubmitting(false);
     setPendingDelete(null);
+  }
+
+  function requestImpersonate(clerkId: string, label: string) {
+    setPendingImpersonate({ clerkId, label });
+  }
+
+  async function confirmImpersonate() {
+    if (!pendingImpersonate) return;
+    const { clerkId } = pendingImpersonate;
+    setImpersonateSubmitting(true);
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next[clerkId];
+      return next;
+    });
+
+    sessionStorage.setItem("adminSessionId", clerk.session?.id ?? "");
+
+    const res = await fetch("/api/admin/impersonate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targetClerkId: clerkId }),
+    });
+
+    if (!res.ok) {
+      setErrors((prev) => ({ ...prev, [clerkId]: "Failed to start impersonation" }));
+      setImpersonateSubmitting(false);
+      setPendingImpersonate(null);
+      return;
+    }
+
+    const { url } = await res.json();
+    window.location.href = url;
   }
 
   if (users === undefined || users === null || filteredUsers === undefined || filteredUsers === null) {
@@ -276,21 +314,40 @@ export default function AdminUsersPage() {
                         </div>
                       </td>
                       <td className="px-6 py-3">
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          disabled={user.clerkId === currentUser?.id}
-                          onClick={() =>
-                            requestDelete(
-                              user.clerkId,
-                              [user.firstName, user.lastName].filter(Boolean).join(" ") ||
-                                user.email ||
-                                user.clerkId
-                            )
-                          }
-                        >
-                          Delete
-                        </Button>
+                        <div className="flex gap-2">
+                          {myRole === "super_admin" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={user.clerkId === currentUser?.id}
+                              onClick={() =>
+                                requestImpersonate(
+                                  user.clerkId,
+                                  [user.firstName, user.lastName].filter(Boolean).join(" ") ||
+                                    user.email ||
+                                    user.clerkId
+                                )
+                              }
+                            >
+                              Impersonate
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            disabled={user.clerkId === currentUser?.id}
+                            onClick={() =>
+                              requestDelete(
+                                user.clerkId,
+                                [user.firstName, user.lastName].filter(Boolean).join(" ") ||
+                                  user.email ||
+                                  user.clerkId
+                              )
+                            }
+                          >
+                            Delete
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -322,6 +379,26 @@ export default function AdminUsersPage() {
             </Button>
             <Button variant="destructive" onClick={confirmDelete} disabled={deleteSubmitting}>
               {deleteSubmitting ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!pendingImpersonate} onOpenChange={(open) => !open && setPendingImpersonate(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Impersonate {pendingImpersonate?.label}?</DialogTitle>
+            <DialogDescription>
+              You&apos;ll be signed in as this user until you exit impersonation from the banner shown at
+              the top of the app.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingImpersonate(null)} disabled={impersonateSubmitting}>
+              Cancel
+            </Button>
+            <Button onClick={confirmImpersonate} disabled={impersonateSubmitting}>
+              {impersonateSubmitting ? "Starting…" : "Impersonate"}
             </Button>
           </DialogFooter>
         </DialogContent>

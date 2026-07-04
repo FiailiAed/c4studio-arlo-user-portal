@@ -10,6 +10,7 @@
 
 import type * as customTables from "../customTables.js";
 import type * as http from "../http.js";
+import type * as impersonation from "../impersonation.js";
 import type * as players from "../players.js";
 import type * as users from "../users.js";
 
@@ -22,6 +23,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   customTables: typeof customTables;
   http: typeof http;
+  impersonation: typeof impersonation;
   players: typeof players;
   users: typeof users;
 }>;
