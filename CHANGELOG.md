@@ -4,9 +4,39 @@ Project history is tracked through git branches. Each branch represents a featur
 
 ---
 
-## Branch: `feat/player-registration`
+## Branch: `feat/user-impersonation`
 
 **Status**: In progress — not yet merged.
+
+**Purpose**: Let a new `super_admin` role (strict superset of `league_admin`, plus impersonation — no target restrictions, no reason field, per explicit product decision) sign in as any other user for support purposes, using Clerk's native Actor Token API rather than a custom session-swap.
+
+### What was built
+
+- **`lib/roles.ts`** — Added `"super_admin"` to `AppRole` and a `ROLE_CONFIG` entry ("All League Admin permissions" + "Impersonate any user account"). `DASHBOARD_PLACEHOLDERS`'s exclude type grew to also exclude `super_admin`, which gets the same real `AdminLinkCard` as `league_admin` rather than a placeholder.
+- **`app/dashboard/page.tsx`, `app/admin/page.tsx`** — Extended the `league_admin`-only checks/records to also include `super_admin` (dashboard admin card, League Overview role-count breakdown).
+- **`proxy.ts`** — The `/admin(.*)` gate is now an allowlist of `league_admin`/`super_admin` instead of a single-role check.
+- **`convex/schema.ts`** — Added `impersonationEvents` (`adminClerkId`, `targetClerkId`, `startedAt`), indexed `by_admin` and `by_target` — the audit trail, since there's no reason field or target restriction to otherwise constrain this feature.
+- **`convex/impersonation.ts`** (new) — `logStart` mutation, gated `super_admin`-only via the same JWT-then-DB-fallback pattern as `users.listAll`. It's a public `mutation` (not `internalMutation`) because it's invoked from a Next.js Route Handler via `ConvexHttpClient`, which can only call public functions — it independently re-verifies the caller's role rather than trusting the route handler's own check, consistent with how every other Convex function in this app re-checks role itself (defense in depth).
+- **`app/api/admin/impersonate/route.ts`** (new) — `super_admin`-only. Calls `clerkClient().actorTokens.create({ userId: targetClerkId, actor: { sub: callerId } })` (Clerk's purpose-built impersonation primitive — the resulting session carries a tamper-proof `actor` claim identifying the real admin). Builds its own redemption URL from the raw `actorToken.token` (`/sign-in?__clerk_ticket=...`) rather than using `actorToken.url` — see Bugs Fixed below. Logs the audit event via a `ConvexHttpClient` call forwarding the caller's Convex JWT (`getToken({ template: "convex" })`) — audit-log failures are logged server-side but never block impersonation itself. Returns `{ url }` for the client to navigate to.
+- **`app/api/admin/exit-impersonation/route.ts`** (new) — No target/role param needed: reads `auth().actor.sub` (the admin's real Clerk ID, cryptographically embedded in the current impersonated session's JWT) and calls `clerkClient().signInTokens.createSignInToken({ userId: actor.sub, expiresInSeconds: 60 })` — a normal sign-in ticket, not another actor token, since this returns the admin to their own account with no `actor` claim. Same redemption-URL-building pattern as the impersonate route.
+- **`app/admin/users/page.tsx`** — Added `"super_admin"` to the `ROLES` array; a per-row "Impersonate" button (visible only when the acting user's own Convex-sourced role is `super_admin`, disabled on your own row) behind the existing shared-`Dialog` confirmation pattern (non-destructive styling, unlike Delete). On confirm: POSTs to `/api/admin/impersonate`, signs out of the current session, then does a full `window.location.href` navigation to the returned ticket URL.
+- **`components/impersonation-banner.tsx`** (new) — Client component checking `useAuth().actor`; renders "Viewing as {current user's name} (impersonation)" with an "Exit impersonation" button whenever an actor claim is present. On click: POSTs to `/api/admin/exit-impersonation`, signs out, navigates to the returned ticket URL. Mounted in `app/layout.tsx` between the header and `{children}`.
+
+### Bugs fixed during this branch
+
+- **Impersonation redirected to Clerk's hosted Account Portal** (`*.accounts.dev/default-redirect`) instead of this app: `ActorTokenCreateParams` has no `redirectUrl` field (unlike the invitation API), so `actorToken.url` defaulted to the Account Portal. Fixed by ignoring `.url` and building a same-app URL from the raw `.token` instead.
+- **`super_admin` got "Forbidden" calling `listAll`** despite the role existing: adding the role tier only updated page-level gates (`proxy.ts`, dashboard pages) — the actual `league_admin`-only checks inside `convex/users.ts`, `convex/customTables.ts`, and the `VALID_ROLES` arrays in `app/api/users/{role,delete,invite}/route.ts` were missed on the first pass. Fixed by grepping the whole repo for `"league_admin"` and updating every match to an allowlist.
+- **Impersonation appeared to "work" (redirected into the app) but the admin was still signed in as themselves**: Clerk silently ignores a sign-in ticket (`__clerk_ticket`) whenever a session is already active — redeeming into a session alongside an existing one requires Clerk's paid multi-session feature. Fixed without relying on multi-session: `clerk.signOut()` runs client-side immediately before navigating to any ticket URL, both entering and exiting impersonation. This is also why exit uses a fresh `signInTokens.createSignInToken()` (a normal ticket) targeting `auth().actor.sub`, rather than trying to restore a coexisting original session via `setActive` — there is no coexisting session in single-session mode, so nothing to switch back to.
+
+### Notes
+
+- No `session.created`/session-level webhook handling was added — Clerk fires no distinguishable webhook for actor-token sign-ins (`user.*` webhooks still carry the *target's* real Clerk ID), so the existing `convex/http.ts` webhook handler needed no changes and can't be used for impersonation-start auditing; the audit write happens directly from the API route instead.
+- `bunx convex codegen` ran successfully against the real dev deployment for this branch (unlike the last two branches, which had no deployment credentials in their isolated worktrees and required hand-editing `convex/_generated/api.d.ts`) — `impersonationEvents` is live in the actual schema.
+- Manual browser testing still needed: promote a test account to `super_admin`, impersonate another account, confirm the banner and app behave as that user, exit impersonation and confirm return to the real account.
+
+## Branch: `feat/player-registration` (merged)
+
+**Status**: Merged into `development` via PR #9.
 
 **Purpose**: Give `family`-role users player profile CRUD (their children) — no registration flow, no season/program/team concept, no payments. Programs, Teams, and Game Scheduling are separate future projects and `players` does not reference them (no `programId`/`teamId`/`season`).
 
@@ -26,9 +56,9 @@ Project history is tracked through git branches. Each branch represents a featur
 - No `proxy.ts` changes — `/players(.*)` already falls under the default "any authenticated user" path.
 - This worktree had no Convex deployment credentials available, so `convex/_generated/api.d.ts` (normally regenerated by `convex dev`) was hand-edited to add the `players` module declaration; `api.js` uses `anyApi` at runtime so no runtime regeneration was required for typechecking/build to pass. Whoever picks this up next should run `bunx convex dev` once to let Convex regenerate this file for real and confirm it matches.
 - Manual browser testing still needed (no real Clerk session available in this environment): add a player, refresh to confirm persistence, edit a player, delete a player, and confirm a second family account cannot see or edit the first family's players.
-## Branch: `feat/admin-custom-data`
+## Branch: `feat/admin-custom-data` (merged)
 
-**Status**: In progress — not yet merged. Branched from `feat/admin-dashboard` (not `development`), since it depends on that branch's `app/admin/layout.tsx`, `components/ui/dialog.tsx`, and `components/ui/arlo-loader.tsx`, which haven't merged to `development` yet. Merge `feat/admin-dashboard` first.
+**Status**: Merged into `development` via PR #8.
 
 **Purpose**: Give `league_admin` a "sandbox" to define their own data tables (name + columns + types) at runtime and manage rows in a generic grid — for league-specific data the developers can't predict ahead of time (e.g. equipment inventory, volunteer hours). This is a deliberate, isolated exception to the project's strict-TypeScript/zero-`any` rule.
 
@@ -54,9 +84,9 @@ Shown in full at table creation, condensed in the columns editor:
 
 ---
 
-## Branch: `feat/admin-dashboard`
+## Branch: `feat/admin-dashboard` (merged)
 
-**Status**: In progress — open PR, not yet merged to `development`.
+**Status**: Merged into `development` via PR #7.
 
 **Purpose**: Give `/admin` a real landing page (stats + quick links), add nav between admin pages, and stop `/dashboard` from duplicating admin stats.
 

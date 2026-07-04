@@ -52,6 +52,7 @@ function AdminOverviewCard() {
     referee: 0,
     program_admin: 0,
     league_admin: 0,
+    super_admin: 0,
   };
   let unassigned = 0;
   for (const u of allUsers) {

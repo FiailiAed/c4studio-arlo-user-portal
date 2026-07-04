@@ -39,7 +39,7 @@ export default function DashboardPage() {
   return (
     <main className="flex flex-1 flex-col items-center py-12 px-4">
       <div className="w-full max-w-2xl space-y-6">
-        {role === "league_admin" ? (
+        {role === "league_admin" || role === "super_admin" ? (
           <AdminLinkCard />
         ) : role === "family" ? (
           <PlayersLinkCard />
@@ -54,7 +54,7 @@ export default function DashboardPage() {
 function RolePlaceholderCard({
   role,
 }: {
-  role: Exclude<AppRole, "league_admin" | "family"> | undefined;
+  role: Exclude<AppRole, "league_admin" | "family" | "super_admin"> | undefined;
 }) {
   const placeholder = role ? DASHBOARD_PLACEHOLDERS[role] : undefined;
 
