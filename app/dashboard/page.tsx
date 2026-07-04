@@ -10,7 +10,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { DASHBOARD_PLACEHOLDERS, type AppRole } from "@/lib/roles";
+import { DASHBOARD_PLACEHOLDERS, hasAnyRole, type AppRole } from "@/lib/roles";
 
 export default function DashboardPage() {
   const { user: clerkUser } = useUser();
@@ -34,20 +34,16 @@ export default function DashboardPage() {
     );
   }
 
-  const role = profile?.role as AppRole | undefined;
+  const roles = (profile?.roles as AppRole[] | undefined) ?? [];
 
   return (
     <main className="flex flex-1 flex-col items-center py-12 px-4">
       <div className="w-full max-w-2xl space-y-6">
-        {role === "league_admin" || role === "super_admin" ? (
-          <AdminLinkCard />
-        ) : role === "family" ? (
-          <PlayersLinkCard />
-        ) : role === "referee" ? (
-          <RefereeLinkCard />
-        ) : (
-          <RolePlaceholderCard role={role} />
-        )}
+        {hasAnyRole(roles, ["league_admin", "super_admin"]) && <AdminLinkCard />}
+        {roles.includes("family") && <PlayersLinkCard />}
+        {roles.includes("referee") && <RefereeLinkCard />}
+        {roles.includes("program_admin") && <RolePlaceholderCard role="program_admin" />}
+        {roles.length === 0 && <RolePlaceholderCard role={undefined} />}
       </div>
     </main>
   );

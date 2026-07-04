@@ -1,5 +1,9 @@
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 
+function hasAnyRole(roles: string[] | undefined, allowed: string[]): boolean {
+  return !!roles?.some((r) => allowed.includes(r));
+}
+
 /**
  * Query-side gate: returns null (never throws) when identity is absent,
  * since throwing leaves useQuery permanently stuck in an error state during
@@ -10,14 +14,14 @@ export async function requireLeagueAdminQuery(ctx: QueryCtx) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) return null;
 
-  const jwtRole = (identity["metadata"] as { role?: string } | undefined)?.role;
+  const jwtRoles = (identity["metadata"] as { roles?: string[] } | undefined)?.roles;
 
-  if (jwtRole !== "league_admin" && jwtRole !== "super_admin") {
+  if (!hasAnyRole(jwtRoles, ["league_admin", "super_admin"])) {
     const caller = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .unique();
-    if (caller?.role !== "league_admin" && caller?.role !== "super_admin") throw new Error("Forbidden");
+    if (!hasAnyRole(caller?.roles, ["league_admin", "super_admin"])) throw new Error("Forbidden");
   }
 
   return identity;
@@ -31,14 +35,14 @@ export async function requireLeagueAdminMutation(ctx: MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new Error("Not authenticated");
 
-  const jwtRole = (identity["metadata"] as { role?: string } | undefined)?.role;
+  const jwtRoles = (identity["metadata"] as { roles?: string[] } | undefined)?.roles;
 
-  if (jwtRole !== "league_admin" && jwtRole !== "super_admin") {
+  if (!hasAnyRole(jwtRoles, ["league_admin", "super_admin"])) {
     const caller = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .unique();
-    if (caller?.role !== "league_admin" && caller?.role !== "super_admin") throw new Error("Forbidden");
+    if (!hasAnyRole(caller?.roles, ["league_admin", "super_admin"])) throw new Error("Forbidden");
   }
 
   return identity;
@@ -52,14 +56,14 @@ export async function requireRefereeQuery(ctx: QueryCtx) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) return null;
 
-  const jwtRole = (identity["metadata"] as { role?: string } | undefined)?.role;
-  if (jwtRole === "referee") return identity;
+  const jwtRoles = (identity["metadata"] as { roles?: string[] } | undefined)?.roles;
+  if (hasAnyRole(jwtRoles, ["referee"])) return identity;
 
   const caller = await ctx.db
     .query("users")
     .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
     .unique();
-  if (caller?.role !== "referee") throw new Error("Forbidden");
+  if (!hasAnyRole(caller?.roles, ["referee"])) throw new Error("Forbidden");
 
   return identity;
 }
@@ -72,14 +76,14 @@ export async function requireRefereeMutation(ctx: MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new Error("Not authenticated");
 
-  const jwtRole = (identity["metadata"] as { role?: string } | undefined)?.role;
-  if (jwtRole === "referee") return identity;
+  const jwtRoles = (identity["metadata"] as { roles?: string[] } | undefined)?.roles;
+  if (hasAnyRole(jwtRoles, ["referee"])) return identity;
 
   const caller = await ctx.db
     .query("users")
     .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
     .unique();
-  if (caller?.role !== "referee") throw new Error("Forbidden");
+  if (!hasAnyRole(caller?.roles, ["referee"])) throw new Error("Forbidden");
 
   return identity;
 }

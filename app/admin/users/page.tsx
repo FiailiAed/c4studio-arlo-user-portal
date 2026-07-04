@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { getRoleConfig, type AppRole } from "@/lib/roles";
+import { getRoleConfig, hasAnyRole, type AppRole } from "@/lib/roles";
 import type { Doc } from "../../../convex/_generated/dataModel";
 
 const ROLES: AppRole[] = ["family", "referee", "program_admin", "league_admin", "super_admin"];
@@ -32,11 +32,11 @@ export default function AdminUsersPage() {
   const clerk = useClerk();
   const users = useQuery(api.users.listAll);
   const myProfile = useQuery(api.users.getCurrentUser);
-  const myRole = myProfile?.role as AppRole | undefined;
-  const [optimisticRoles, setOptimisticRoles] = useState<Record<string, AppRole>>({});
+  const myRoles = myProfile?.roles as AppRole[] | undefined;
+  const [optimisticRoles, setOptimisticRoles] = useState<Record<string, AppRole[]>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [bulkRole, setBulkRole] = useState<AppRole | "">("");
+  const [bulkRoles, setBulkRoles] = useState<AppRole[]>([]);
   const [bulkApplying, setBulkApplying] = useState(false);
   const [search, setSearch] = useState("");
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
@@ -55,10 +55,10 @@ export default function AdminUsersPage() {
     });
   }, [users, search]);
 
-  async function applyRole(clerkIds: string[], role: AppRole) {
+  async function applyRoles(clerkIds: string[], roles: AppRole[]) {
     setOptimisticRoles((prev) => {
       const next = { ...prev };
-      for (const id of clerkIds) next[id] = role;
+      for (const id of clerkIds) next[id] = roles;
       return next;
     });
     setErrors((prev) => {
@@ -70,7 +70,7 @@ export default function AdminUsersPage() {
     const res = await fetch("/api/users/role", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userIds: clerkIds, role }),
+      body: JSON.stringify({ userIds: clerkIds, roles }),
     });
 
     if (!res.ok) {
@@ -89,19 +89,24 @@ export default function AdminUsersPage() {
     return res.ok;
   }
 
-  function handleRoleChange(clerkId: string, role: AppRole) {
-    applyRole([clerkId], role);
+  function handleRoleToggle(clerkId: string, currentRoles: AppRole[], role: AppRole, checked: boolean) {
+    const nextRoles = checked ? [...currentRoles, role] : currentRoles.filter((r) => r !== role);
+    applyRoles([clerkId], nextRoles);
   }
 
   async function handleBulkApply() {
-    if (!bulkRole || selected.size === 0) return;
+    if (bulkRoles.length === 0 || selected.size === 0) return;
     setBulkApplying(true);
-    const ok = await applyRole(Array.from(selected), bulkRole);
+    const ok = await applyRoles(Array.from(selected), bulkRoles);
     setBulkApplying(false);
     if (ok) {
       setSelected(new Set());
-      setBulkRole("");
+      setBulkRoles([]);
     }
+  }
+
+  function toggleBulkRole(role: AppRole, checked: boolean) {
+    setBulkRoles((prev) => (checked ? [...prev, role] : prev.filter((r) => r !== role)));
   }
 
   function toggleSelected(clerkId: string) {
@@ -225,36 +230,39 @@ export default function AdminUsersPage() {
     },
     {
       key: "role",
-      header: "Role",
+      header: "Roles",
       render: (user) => {
-        const displayRole = (optimisticRoles[user.clerkId] ?? user.role) as AppRole | undefined;
-        const roleConfig = getRoleConfig(displayRole);
-        return roleConfig ? (
-          <Badge variant="secondary">{roleConfig.label}</Badge>
-        ) : (
+        const displayRoles = (optimisticRoles[user.clerkId] ?? user.roles ?? []) as AppRole[];
+        return displayRoles.length === 0 ? (
           <Badge variant="outline" className="text-muted-foreground">None</Badge>
+        ) : (
+          <div className="flex flex-wrap gap-1">
+            {displayRoles.map((r) => (
+              <Badge key={r} variant="secondary">{getRoleConfig(r)?.label ?? r}</Badge>
+            ))}
+          </div>
         );
       },
     },
     {
       key: "changeRole",
-      header: "Change Role",
+      header: "Change Roles",
       render: (user) => {
-        const displayRole = (optimisticRoles[user.clerkId] ?? user.role) as AppRole | undefined;
+        const displayRoles = (optimisticRoles[user.clerkId] ?? user.roles ?? []) as AppRole[];
         return (
           <div className="space-y-1">
-            <select
-              value={displayRole ?? ""}
-              onChange={(e) => handleRoleChange(user.clerkId, e.target.value as AppRole)}
-              className="rounded-md border border-input bg-background px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring/50"
-            >
-              <option value="" disabled>Select role…</option>
+            <div className="flex flex-col gap-1">
               {ROLES.map((r) => (
-                <option key={r} value={r}>
+                <label key={r} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={displayRoles.includes(r)}
+                    onChange={(e) => handleRoleToggle(user.clerkId, displayRoles, r, e.target.checked)}
+                  />
                   {getRoleConfig(r)?.label ?? r}
-                </option>
+                </label>
               ))}
-            </select>
+            </div>
             {errors[user.clerkId] && (
               <p className="text-xs text-destructive">{errors[user.clerkId]}</p>
             )}
@@ -284,21 +292,21 @@ export default function AdminUsersPage() {
         />
 
         {selected.size > 0 && (
-          <div className="flex items-center gap-3 rounded-md border bg-muted/50 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-3 rounded-md border bg-muted/50 px-4 py-3">
             <span className="text-sm font-medium">{selected.size} selected</span>
-            <select
-              value={bulkRole}
-              onChange={(e) => setBulkRole(e.target.value as AppRole)}
-              className="rounded-md border border-input bg-background px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring/50"
-            >
-              <option value="" disabled>Select role…</option>
+            <div className="flex flex-wrap gap-3">
               {ROLES.map((r) => (
-                <option key={r} value={r}>
+                <label key={r} className="flex items-center gap-1.5 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={bulkRoles.includes(r)}
+                    onChange={(e) => toggleBulkRole(r, e.target.checked)}
+                  />
                   {getRoleConfig(r)?.label ?? r}
-                </option>
+                </label>
               ))}
-            </select>
-            <Button size="sm" disabled={!bulkRole || bulkApplying} onClick={handleBulkApply}>
+            </div>
+            <Button size="sm" disabled={bulkRoles.length === 0 || bulkApplying} onClick={handleBulkApply}>
               {bulkApplying ? "Applying…" : "Apply to selected"}
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
@@ -327,7 +335,7 @@ export default function AdminUsersPage() {
               }}
               renderActions={(user) => (
                 <div className="flex gap-2">
-                  {myRole === "super_admin" && (
+                  {hasAnyRole(myRoles, ["super_admin"]) && (
                     <Button
                       size="sm"
                       variant="outline"

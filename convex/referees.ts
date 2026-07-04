@@ -12,10 +12,8 @@ export const getAvailableRefs = query({
     const game = await ctx.db.get(args.gameId);
     if (!game) return null;
 
-    const referees = await ctx.db
-      .query("users")
-      .withIndex("by_role", (q) => q.eq("role", "referee"))
-      .collect();
+    const allUsers = await ctx.db.query("users").collect();
+    const referees = allUsers.filter((u) => u.roles?.includes("referee"));
 
     const allGames = await ctx.db.query("games").collect();
 

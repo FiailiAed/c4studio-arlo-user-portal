@@ -1,10 +1,10 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
-import type { AppRole } from "@/lib/roles";
+import { hasAnyRole, type AppRole } from "@/lib/roles";
 
 export async function POST(request: Request) {
   const { userId: callerId, sessionClaims } = await auth();
-  const callerRole = (sessionClaims?.metadata as { role?: AppRole } | undefined)?.role;
-  if (callerRole !== "league_admin" && callerRole !== "super_admin") {
+  const callerRoles = (sessionClaims?.metadata as { roles?: AppRole[] } | undefined)?.roles;
+  if (!hasAnyRole(callerRoles, ["league_admin", "super_admin"])) {
     return new Response("Forbidden", { status: 403 });
   }
 

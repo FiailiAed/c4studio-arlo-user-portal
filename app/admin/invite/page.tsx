@@ -13,10 +13,15 @@ type Status = "idle" | "submitting" | "success" | "error";
 
 export default function InviteUsersPage() {
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<AppRole | "">("");
+  const [roles, setRoles] = useState<AppRole[]>([]);
   const [status, setStatus] = useState<Status>("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [invitedEmail, setInvitedEmail] = useState("");
+
+  function toggleRole(role: AppRole, checked: boolean) {
+    setRoles((prev) => (checked ? [...prev, role] : prev.filter((r) => r !== role)));
+    setStatus("idle");
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,14 +30,14 @@ export default function InviteUsersPage() {
     const res = await fetch("/api/users/invite", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, role }),
+      body: JSON.stringify({ email, roles }),
     });
 
     if (res.ok) {
       setStatus("success");
       setInvitedEmail(email);
       setEmail("");
-      setRole("");
+      setRoles([]);
       return;
     }
 
@@ -69,23 +74,19 @@ export default function InviteUsersPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="role">Role</Label>
-                <select
-                  id="role"
-                  value={role}
-                  onChange={(e) => {
-                    setRole(e.target.value as AppRole);
-                    setStatus("idle");
-                  }}
-                  className="w-full rounded-md border border-input bg-background px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring/50"
-                >
-                  <option value="" disabled>Select role…</option>
+                <Label>Roles</Label>
+                <div className="flex flex-col gap-2">
                   {ROLES.map((r) => (
-                    <option key={r} value={r}>
+                    <label key={r} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={roles.includes(r)}
+                        onChange={(e) => toggleRole(r, e.target.checked)}
+                      />
                       {getRoleConfig(r)?.label ?? r}
-                    </option>
+                    </label>
                   ))}
-                </select>
+                </div>
               </div>
 
               {status === "success" && (
@@ -93,7 +94,7 @@ export default function InviteUsersPage() {
               )}
               {status === "error" && <p className="text-sm text-destructive">{errorMessage}</p>}
 
-              <Button type="submit" disabled={!email || !role || status === "submitting"}>
+              <Button type="submit" disabled={!email || roles.length === 0 || status === "submitting"}>
                 {status === "submitting" ? "Sending…" : "Send Invite"}
               </Button>
             </form>

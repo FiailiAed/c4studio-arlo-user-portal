@@ -12,7 +12,7 @@ interface ClerkUserEvent {
     first_name?: string | null;
     last_name?: string | null;
     email_addresses?: { email_address: string }[];
-    public_metadata?: { role?: string };
+    public_metadata?: { roles?: string[] };
   };
 }
 
@@ -43,7 +43,7 @@ http.route({
         firstName: first_name ?? undefined,
         lastName: last_name ?? undefined,
         email: email_addresses?.[0]?.email_address,
-        role: public_metadata?.role,
+        roles: public_metadata?.roles,
       });
     } else if (event.type === "user.deleted") {
       await ctx.runMutation(internal.users.deleteByClerkId, { clerkId: event.data.id });

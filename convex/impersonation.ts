@@ -7,14 +7,14 @@ export const logStart = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
 
-    const jwtRole = (identity["metadata"] as { role?: string } | undefined)?.role;
+    const jwtRoles = (identity["metadata"] as { roles?: string[] } | undefined)?.roles;
 
-    if (jwtRole !== "super_admin") {
+    if (!jwtRoles?.includes("super_admin")) {
       const caller = await ctx.db
         .query("users")
         .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
         .unique();
-      if (caller?.role !== "super_admin") throw new Error("Forbidden");
+      if (!caller?.roles?.includes("super_admin")) throw new Error("Forbidden");
     }
 
     await ctx.db.insert("impersonationEvents", {

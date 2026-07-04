@@ -103,7 +103,7 @@ export const syncFromWebhook = internalMutation({
     firstName: v.optional(v.string()),
     lastName: v.optional(v.string()),
     email: v.optional(v.string()),
-    role: v.optional(v.string()),
+    roles: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db
@@ -115,7 +115,7 @@ export const syncFromWebhook = internalMutation({
       firstName: args.firstName,
       lastName: args.lastName,
       email: args.email,
-      role: args.role,
+      roles: args.roles,
     };
 
     if (existing) {

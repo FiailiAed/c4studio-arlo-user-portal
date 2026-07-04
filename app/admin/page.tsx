@@ -104,15 +104,22 @@ function AdminOverviewCard() {
   };
   let unassigned = 0;
   for (const u of allUsers) {
-    if (u.role && u.role in counts) counts[u.role as AppRole]++;
-    else unassigned++;
+    if (u.roles && u.roles.length > 0) {
+      for (const r of u.roles) {
+        if (r in counts) counts[r as AppRole]++;
+      }
+    } else {
+      unassigned++;
+    }
   }
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-base">League Overview</CardTitle>
-        <CardDescription>{allUsers.length} total users</CardDescription>
+        <CardDescription>
+          {allUsers.length} total users · role counts may overlap since a user can hold multiple roles
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 gap-4 text-sm">

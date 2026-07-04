@@ -1,5 +1,9 @@
 export type AppRole = "family" | "referee" | "program_admin" | "league_admin" | "super_admin";
 
+export function hasAnyRole(roles: string[] | undefined, allowed: string[]): boolean {
+  return !!roles?.some((r) => allowed.includes(r));
+}
+
 const ROLE_CONFIG: Record<AppRole, { label: string; description: string; permissions: string[] }> = {
   family: {
     label: "Family",

@@ -25,8 +25,7 @@ export default function UserPage() {
     );
   }
 
-  const role = profile?.role as AppRole | undefined;
-  const roleConfig = getRoleConfig(role);
+  const roles = (profile?.roles as AppRole[] | undefined) ?? [];
 
   const initials = (
     (clerkUser?.firstName?.[0] ?? "") + (clerkUser?.lastName?.[0] ?? "")
@@ -102,33 +101,36 @@ export default function UserPage() {
           <CardHeader>
             <CardTitle className="text-base">Permissions</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4 text-sm">
-            <div className="flex items-center gap-3">
-              <span className="text-muted-foreground">Role</span>
-              {roleConfig ? (
-                <Badge variant="secondary">{roleConfig.label}</Badge>
-              ) : (
-                <Badge variant="outline" className="text-muted-foreground">
-                  Not assigned
-                </Badge>
-              )}
-            </div>
-            {roleConfig ? (
-              <>
-                <p className="text-muted-foreground">{roleConfig.description}</p>
-                <ul className="space-y-1.5">
-                  {roleConfig.permissions.map((p) => (
-                    <li key={p} className="flex items-center gap-2 text-muted-foreground">
-                      <span className="text-foreground">✓</span>
-                      {p}
-                    </li>
-                  ))}
-                </ul>
-              </>
-            ) : (
+          <CardContent className="space-y-6 text-sm">
+            {roles.length === 0 ? (
               <p className="text-muted-foreground">
                 No role has been assigned to your account. Contact a league admin to get access.
               </p>
+            ) : (
+              roles.map((role, i) => {
+                const roleConfig = getRoleConfig(role);
+                return (
+                  <div key={role} className={i > 0 ? "space-y-4 border-t pt-4" : "space-y-4"}>
+                    <div className="flex items-center gap-3">
+                      <span className="text-muted-foreground">Role</span>
+                      <Badge variant="secondary">{roleConfig?.label ?? role}</Badge>
+                    </div>
+                    {roleConfig && (
+                      <>
+                        <p className="text-muted-foreground">{roleConfig.description}</p>
+                        <ul className="space-y-1.5">
+                          {roleConfig.permissions.map((p) => (
+                            <li key={p} className="flex items-center gap-2 text-muted-foreground">
+                              <span className="text-foreground">✓</span>
+                              {p}
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                  </div>
+                );
+              })
             )}
           </CardContent>
         </Card>

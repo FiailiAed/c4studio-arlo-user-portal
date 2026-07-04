@@ -1,13 +1,13 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
-import type { AppRole } from "@/lib/roles";
+import { hasAnyRole, type AppRole } from "@/lib/roles";
 
 export async function POST(request: Request) {
   const authResult = await auth();
   const { userId: callerId, sessionClaims } = authResult;
-  const callerRole = (sessionClaims?.metadata as { role?: AppRole } | undefined)?.role;
-  if (callerRole !== "super_admin") {
+  const callerRoles = (sessionClaims?.metadata as { roles?: AppRole[] } | undefined)?.roles;
+  if (!hasAnyRole(callerRoles, ["super_admin"])) {
     return new Response("Forbidden", { status: 403 });
   }
 

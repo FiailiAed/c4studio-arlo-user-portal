@@ -7,7 +7,7 @@ export default defineSchema({
     firstName: v.optional(v.string()),
     lastName: v.optional(v.string()),
     email: v.optional(v.string()),
-    role: v.optional(v.string()),
+    roles: v.optional(v.array(v.string())),
     phone: v.optional(v.string()),
     dateOfBirth: v.optional(v.string()),
     address: v.optional(
@@ -18,8 +18,7 @@ export default defineSchema({
         zip: v.string(),
       })
     ),
-  }).index("by_clerk_id", ["clerkId"])
-    .index("by_role", ["role"]),
+  }).index("by_clerk_id", ["clerkId"]),
 
   players: defineTable({
     guardianClerkId: v.string(),

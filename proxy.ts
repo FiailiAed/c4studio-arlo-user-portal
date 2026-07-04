@@ -1,5 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { hasAnyRole } from "@/lib/roles";
 
 const isPublicRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"]);
 const isAdminRoute = createRouteMatcher(["/admin(.*)"]);
@@ -10,15 +11,15 @@ export default clerkMiddleware(async (auth, request) => {
   await auth.protect();
   if (isAdminRoute(request)) {
     const { sessionClaims } = await auth();
-    const role = (sessionClaims?.metadata as { role?: string } | undefined)?.role;
-    if (role !== "league_admin" && role !== "super_admin") {
+    const roles = (sessionClaims?.metadata as { roles?: string[] } | undefined)?.roles;
+    if (!hasAnyRole(roles, ["league_admin", "super_admin"])) {
       return NextResponse.redirect(new URL("/dashboard", request.url));
     }
   }
   if (isRefereeRoute(request)) {
     const { sessionClaims } = await auth();
-    const role = (sessionClaims?.metadata as { role?: string } | undefined)?.role;
-    if (role !== "referee" && role !== "league_admin" && role !== "super_admin") {
+    const roles = (sessionClaims?.metadata as { roles?: string[] } | undefined)?.roles;
+    if (!hasAnyRole(roles, ["referee", "league_admin", "super_admin"])) {
       return NextResponse.redirect(new URL("/dashboard", request.url));
     }
   }
