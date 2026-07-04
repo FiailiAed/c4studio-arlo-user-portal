@@ -110,7 +110,7 @@ if (!identity) return null; // NOT throw new Error("Unauthorized")
 │   │   ├── page.tsx            # Read-only Profile Details + Permissions ("My Profile" link in header)
 │   │   └── edit/page.tsx       # Edit phone/DOB/address (Clerk owns name/email)
 │   ├── admin/
-│   │   ├── layout.tsx          # Admin nav (Dashboard | Users | Invite tabs), active-tab via usePathname
+│   │   ├── layout.tsx          # Admin nav (Dashboard | Users | Invite | Data tabs), active-tab via usePathname
 │   │   ├── page.tsx            # /admin — League Overview widget + "Manage Users"/"Invite Users" quick links
 │   │   ├── users/page.tsx      # /admin/users — Role management table (league_admin only)
 │   │   └── invite/page.tsx     # /admin/invite — Send a Clerk email invite with a pre-assigned role
@@ -118,6 +118,10 @@ if (!identity) return null; // NOT throw new Error("Unauthorized")
 │   │   ├── page.tsx            # /players — family's player list (cards), Add/Edit/Delete
 │   │   ├── new/page.tsx        # /players/new — create-player form
 │   │   └── [playerId]/edit/page.tsx  # /players/[playerId]/edit — edit-player form
+│   │   ├── invite/page.tsx     # /admin/invite — Send a Clerk email invite with a pre-assigned role
+│   │   └── data/                # /admin/data — league_admin-defined custom data tables (sandbox, not type-safe)
+│   │       ├── page.tsx        # List of tables + "New Table" builder dialog
+│   │       └── [tableId]/page.tsx # Column editor + record CRUD grid for one custom table
 │   └── api/
 │       ├── users/role/route.ts   # Server route: update Clerk publicMetadata.role
 │       ├── users/invite/route.ts # Server route: create a Clerk invitation with publicMetadata.role preset
@@ -129,6 +133,9 @@ if (!identity) return null; // NOT throw new Error("Unauthorized")
 │   ├── schema.ts               # users, players tables
 │   ├── users.ts                # getCurrentUser, upsertUser, updateProfile, listAll, syncFromWebhook, deleteByClerkId
 │   ├── players.ts              # listMyPlayers, createPlayer, updatePlayer, deletePlayer (guardian-scoped)
+│   ├── schema.ts               # users, tableDefinitions, customRecords tables
+│   ├── users.ts                # getCurrentUser, upsertUser, updateProfile, listAll, syncFromWebhook, deleteByClerkId
+│   ├── customTables.ts         # league_admin-only CRUD for admin-defined tables/columns/records (v.any() confined here)
 │   ├── http.ts                 # Clerk webhook handler at /clerk-webhook
 │   └── auth.config.ts          # Links to Clerk JWT template "convex"
 └── lib/
@@ -182,6 +189,23 @@ players: defineTable({
 ```
 
 `players.guardianClerkId` mirrors the `users.clerkId` / `by_clerk_id` convention (a raw Clerk subject string, not a `users._id` reference) so a player profile survives even if the guardian's own `users` doc doesn't exist yet. No `programId`/`teamId`/`season` fields — Programs, Teams, and Game Scheduling are separate future projects that don't exist in this codebase yet.
+tableDefinitions: defineTable({
+  name: v.string(),
+  createdBy: v.string(), // clerkId
+  columns: v.array(v.object({
+    key: v.string(), label: v.string(),
+    type: v.union(v.literal("text"), v.literal("number"), v.literal("date"), v.literal("boolean"), v.literal("select")),
+    options: v.optional(v.array(v.string())),
+  })),
+}).index("by_name", ["name"])
+
+customRecords: defineTable({
+  tableId: v.id("tableDefinitions"),
+  data: v.record(v.string(), v.any()), // columnKey -> value; the ONE deliberate v.any() exception in this app
+}).index("by_table", ["tableId"])
+```
+
+**`v.any()` exception**: `customRecords.data` and its corresponding mutation args in `convex/customTables.ts` are the only place `v.any()` is used in this codebase. This is intentional — `/admin/data` lets `league_admin` define arbitrary table shapes at runtime, which Convex's compile-time schema can't express. Do not let this pattern spread elsewhere; every other table/query/mutation stays strictly typed.
 
 ---
 
