@@ -1,18 +1,30 @@
 "use client";
 
 import { useQuery } from "convex/react";
+import { useUser } from "@clerk/nextjs";
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { api } from "../../../convex/_generated/api";
 import { ArloLoader } from "@/components/ui/arlo-loader";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import { getRoleConfig, type AppRole } from "@/lib/roles";
 
 const ROLES: AppRole[] = ["family", "referee", "program_admin", "league_admin"];
 
 export default function AdminUsersPage() {
+  const { user: currentUser } = useUser();
   const users = useQuery(api.users.listAll);
   const [optimisticRoles, setOptimisticRoles] = useState<Record<string, AppRole>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -20,6 +32,9 @@ export default function AdminUsersPage() {
   const [bulkRole, setBulkRole] = useState<AppRole | "">("");
   const [bulkApplying, setBulkApplying] = useState(false);
   const [search, setSearch] = useState("");
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  const [pendingDelete, setPendingDelete] = useState<{ clerkId: string; label: string } | null>(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
   const filteredUsers = useMemo(() => {
     if (!users) return users;
@@ -91,7 +106,7 @@ export default function AdminUsersPage() {
 
   function toggleSelectAll() {
     if (!filteredUsers || filteredUsers.length === 0) return;
-    const visibleIds = filteredUsers.map((u) => u.clerkId);
+    const visibleIds = filteredUsers.filter((u) => !deletingIds.has(u.clerkId)).map((u) => u.clerkId);
     const allVisibleSelected = visibleIds.every((id) => selected.has(id));
     setSelected((prev) => {
       const next = new Set(prev);
@@ -104,6 +119,40 @@ export default function AdminUsersPage() {
     });
   }
 
+  function requestDelete(clerkId: string, label: string) {
+    setPendingDelete({ clerkId, label });
+  }
+
+  async function confirmDelete() {
+    if (!pendingDelete) return;
+    const { clerkId } = pendingDelete;
+    setDeleteSubmitting(true);
+    setDeletingIds((prev) => new Set(prev).add(clerkId));
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next[clerkId];
+      return next;
+    });
+
+    const res = await fetch("/api/users/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: clerkId }),
+    });
+
+    if (!res.ok) {
+      setDeletingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(clerkId);
+        return next;
+      });
+      setErrors((prev) => ({ ...prev, [clerkId]: "Failed to delete user" }));
+    }
+
+    setDeleteSubmitting(false);
+    setPendingDelete(null);
+  }
+
   if (users === undefined || users === null || filteredUsers === undefined || filteredUsers === null) {
     return (
       <div className="flex flex-1 items-center justify-center">
@@ -112,10 +161,17 @@ export default function AdminUsersPage() {
     );
   }
 
+  const visibleUsers = filteredUsers.filter((u) => !deletingIds.has(u.clerkId));
+
   return (
     <main className="flex flex-1 flex-col items-center py-12 px-4">
       <div className="w-full max-w-4xl space-y-6">
-        <h1 className="text-2xl font-semibold">User Management</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold">User Management</h1>
+          <Link href="/admin/invite" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+            Invite User
+          </Link>
+        </div>
 
         <Input
           type="search"
@@ -153,7 +209,7 @@ export default function AdminUsersPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
-              All Users {search.trim() && `(${filteredUsers.length} of ${users.length})`}
+              All Users {search.trim() && `(${visibleUsers.length} of ${users.length})`}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -163,7 +219,7 @@ export default function AdminUsersPage() {
                   <th className="px-6 py-3 font-medium">
                     <input
                       type="checkbox"
-                      checked={filteredUsers.length > 0 && filteredUsers.every((u) => selected.has(u.clerkId))}
+                      checked={visibleUsers.length > 0 && visibleUsers.every((u) => selected.has(u.clerkId))}
                       onChange={toggleSelectAll}
                       aria-label="Select all users"
                     />
@@ -173,10 +229,11 @@ export default function AdminUsersPage() {
                   <th className="px-6 py-3 font-medium">Email</th>
                   <th className="px-6 py-3 font-medium">Role</th>
                   <th className="px-6 py-3 font-medium">Change Role</th>
+                  <th className="px-6 py-3 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredUsers.map((user) => {
+                {visibleUsers.map((user) => {
                   const displayRole = (optimisticRoles[user.clerkId] ?? user.role) as AppRole | undefined;
                   const roleConfig = getRoleConfig(displayRole);
                   return (
@@ -218,12 +275,29 @@ export default function AdminUsersPage() {
                           )}
                         </div>
                       </td>
+                      <td className="px-6 py-3">
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          disabled={user.clerkId === currentUser?.id}
+                          onClick={() =>
+                            requestDelete(
+                              user.clerkId,
+                              [user.firstName, user.lastName].filter(Boolean).join(" ") ||
+                                user.email ||
+                                user.clerkId
+                            )
+                          }
+                        >
+                          Delete
+                        </Button>
+                      </td>
                     </tr>
                   );
                 })}
-                {filteredUsers.length === 0 && (
+                {visibleUsers.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-6 py-6 text-center text-muted-foreground">
+                    <td colSpan={7} className="px-6 py-6 text-center text-muted-foreground">
                       {search.trim() ? "No users match your search." : "No users found."}
                     </td>
                   </tr>
@@ -233,6 +307,25 @@ export default function AdminUsersPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={!!pendingDelete} onOpenChange={(open) => !open && setPendingDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete {pendingDelete?.label}?</DialogTitle>
+            <DialogDescription>
+              This will permanently remove their account. This can&apos;t be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingDelete(null)} disabled={deleteSubmitting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete} disabled={deleteSubmitting}>
+              {deleteSubmitting ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
