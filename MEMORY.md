@@ -113,6 +113,11 @@ if (!identity) return null; // NOT throw new Error("Unauthorized")
 │   │   ├── layout.tsx          # Admin nav (Dashboard | Users | Invite | Data tabs), active-tab via usePathname
 │   │   ├── page.tsx            # /admin — League Overview widget + "Manage Users"/"Invite Users" quick links
 │   │   ├── users/page.tsx      # /admin/users — Role management table (league_admin only)
+│   │   └── invite/page.tsx     # /admin/invite — Send a Clerk email invite with a pre-assigned role
+│   ├── players/
+│   │   ├── page.tsx            # /players — family's player list (cards), Add/Edit/Delete
+│   │   ├── new/page.tsx        # /players/new — create-player form
+│   │   └── [playerId]/edit/page.tsx  # /players/[playerId]/edit — edit-player form
 │   │   ├── invite/page.tsx     # /admin/invite — Send a Clerk email invite with a pre-assigned role
 │   │   └── data/                # /admin/data — league_admin-defined custom data tables (sandbox, not type-safe)
 │   │       ├── page.tsx        # List of tables + "New Table" builder dialog
@@ -121,7 +126,13 @@ if (!identity) return null; // NOT throw new Error("Unauthorized")
 │       ├── users/role/route.ts   # Server route: update Clerk publicMetadata.role
 │       ├── users/invite/route.ts # Server route: create a Clerk invitation with publicMetadata.role preset
 │       └── users/delete/route.ts # Server route: delete a Clerk user (blocks self-deletion)
+├── components/
+│   └── players/
+│       └── player-form.tsx     # Shared create/edit player form (mode: "create" | "edit")
 ├── convex/
+│   ├── schema.ts               # users, players tables
+│   ├── users.ts                # getCurrentUser, upsertUser, updateProfile, listAll, syncFromWebhook, deleteByClerkId
+│   ├── players.ts              # listMyPlayers, createPlayer, updatePlayer, deletePlayer (guardian-scoped)
 │   ├── schema.ts               # users, tableDefinitions, customRecords tables
 │   ├── users.ts                # getCurrentUser, upsertUser, updateProfile, listAll, syncFromWebhook, deleteByClerkId
 │   ├── customTables.ts         # league_admin-only CRUD for admin-defined tables/columns/records (v.any() confined here)
@@ -142,6 +153,7 @@ if (!identity) return null; // NOT throw new Error("Unauthorized")
 | password | Clerk | Never touch |
 | role | Clerk `publicMetadata.role` | Cached/denormalized in Convex `users.role` — **`users.role` is the canonical read source in the app** (e.g. `/dashboard`, `/user`); Clerk's client-side `publicMetadata.role` can lag a fresh admin role change until the session JWT refreshes |
 | phone, dateOfBirth, address | Convex | League-specific data, viewed on `/user`, edited via `/user/edit` |
+| players (firstName, lastName, dateOfBirth, gender, school, grade) | Convex | Owned by the `family` guardian who created them (`guardianClerkId`); managed on `/players` |
 
 Convex caches `firstName`, `lastName`, `email`, `role` from Clerk for admin queries. These are synced:
 - On every `/dashboard` page load (`upsertUser` mutation patches the record)
@@ -165,6 +177,18 @@ users: defineTable({
   })),
 }).index("by_clerk_id", ["clerkId"])
 
+players: defineTable({
+  guardianClerkId: v.string(),
+  firstName: v.string(),
+  lastName: v.string(),
+  dateOfBirth: v.string(),
+  gender: v.optional(v.string()),
+  school: v.optional(v.string()),
+  grade: v.optional(v.string()),
+}).index("by_guardian", ["guardianClerkId"])
+```
+
+`players.guardianClerkId` mirrors the `users.clerkId` / `by_clerk_id` convention (a raw Clerk subject string, not a `users._id` reference) so a player profile survives even if the guardian's own `users` doc doesn't exist yet. No `programId`/`teamId`/`season` fields — Programs, Teams, and Game Scheduling are separate future projects that don't exist in this codebase yet.
 tableDefinitions: defineTable({
   name: v.string(),
   createdBy: v.string(), // clerkId
@@ -233,3 +257,5 @@ Same vars needed in Vercel environment variables (except `CONVEX_DEPLOYMENT` is 
 All items from the original `feat/admin-role-management` list are complete: the Clerk webhook is registered and live, `CLERK_WEBHOOK_SECRET` is set in both `.env.local` and the Convex dashboard, `convex/migrations.ts` has been deleted, and `adminrolemanagement.patch` was already removed.
 
 `user.deleted` has been enabled on the existing `/clerk-webhook` subscription and end-to-end deletion (Clerk account removed → Convex `users` row removed via `deleteByClerkId`) has been confirmed working. No outstanding manual steps.
+
+`feat/player-registration` added `family`-role player profile CRUD (`/players`, `/players/new`, `/players/[playerId]/edit`, `convex/players.ts`). Still needs manual browser testing (no real Clerk session available in the branch's dev environment): add a player, refresh to confirm persistence, edit, delete, and confirm a second family account can't see/edit the first family's players. The worktree that built it had no Convex deployment credentials, so `convex/_generated/api.d.ts` was hand-edited to declare the `players` module rather than regenerated via `convex dev` — run `bunx convex dev` once to have Convex regenerate it for real.

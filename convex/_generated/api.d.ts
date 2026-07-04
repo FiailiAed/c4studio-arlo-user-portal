@@ -10,6 +10,7 @@
 
 import type * as customTables from "../customTables.js";
 import type * as http from "../http.js";
+import type * as players from "../players.js";
 import type * as users from "../users.js";
 
 import type {
@@ -21,6 +22,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   customTables: typeof customTables;
   http: typeof http;
+  players: typeof players;
   users: typeof users;
 }>;
 

@@ -39,14 +39,24 @@ export default function DashboardPage() {
   return (
     <main className="flex flex-1 flex-col items-center py-12 px-4">
       <div className="w-full max-w-2xl space-y-6">
-        {role === "league_admin" ? <AdminLinkCard /> : <RolePlaceholderCard role={role} />}
+        {role === "league_admin" ? (
+          <AdminLinkCard />
+        ) : role === "family" ? (
+          <PlayersLinkCard />
+        ) : (
+          <RolePlaceholderCard role={role} />
+        )}
       </div>
     </main>
   );
 }
 
-function RolePlaceholderCard({ role }: { role: AppRole | undefined }) {
-  const placeholder = role && role !== "league_admin" ? DASHBOARD_PLACEHOLDERS[role] : undefined;
+function RolePlaceholderCard({
+  role,
+}: {
+  role: Exclude<AppRole, "league_admin" | "family"> | undefined;
+}) {
+  const placeholder = role ? DASHBOARD_PLACEHOLDERS[role] : undefined;
 
   return (
     <Card>
@@ -72,6 +82,22 @@ function AdminLinkCard() {
           <CardDescription>Manage users and view league-wide stats.</CardDescription>
         </div>
         <Link href="/admin" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+          Open
+        </Link>
+      </CardHeader>
+    </Card>
+  );
+}
+
+function PlayersLinkCard() {
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle className="text-base">My Players</CardTitle>
+          <CardDescription>Add and manage your players&apos; profiles.</CardDescription>
+        </div>
+        <Link href="/players" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
           Open
         </Link>
       </CardHeader>
