@@ -19,4 +19,28 @@ export default defineSchema({
       })
     ),
   }).index("by_clerk_id", ["clerkId"]),
+
+  tableDefinitions: defineTable({
+    name: v.string(),
+    createdBy: v.string(), // clerkId
+    columns: v.array(
+      v.object({
+        key: v.string(), // stable, server-generated, never changes
+        label: v.string(), // freely editable display name
+        type: v.union(
+          v.literal("text"),
+          v.literal("number"),
+          v.literal("date"),
+          v.literal("boolean"),
+          v.literal("select")
+        ),
+        options: v.optional(v.array(v.string())), // "select" only
+      })
+    ),
+  }).index("by_name", ["name"]),
+
+  customRecords: defineTable({
+    tableId: v.id("tableDefinitions"),
+    data: v.record(v.string(), v.any()), // columnKey -> value
+  }).index("by_table", ["tableId"]),
 });
