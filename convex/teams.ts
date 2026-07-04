@@ -13,11 +13,29 @@ export const listTeams = query({
 });
 
 export const createTeam = mutation({
-  args: { name: v.string() },
+  args: {
+    name: v.string(),
+    clubId: v.optional(v.id("clubs")),
+  },
   handler: async (ctx, args) => {
     await requireLeagueAdminMutation(ctx);
 
-    return await ctx.db.insert("teams", { name: args.name });
+    return await ctx.db.insert("teams", { name: args.name, clubId: args.clubId });
+  },
+});
+
+export const assignTeamToClub = mutation({
+  args: {
+    teamId: v.id("teams"),
+    clubId: v.optional(v.id("clubs")),
+  },
+  handler: async (ctx, args) => {
+    await requireLeagueAdminMutation(ctx);
+
+    const team = await ctx.db.get(args.teamId);
+    if (!team) throw new Error("Team not found");
+
+    await ctx.db.patch(args.teamId, { clubId: args.clubId });
   },
 });
 

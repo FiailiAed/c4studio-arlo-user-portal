@@ -7,12 +7,29 @@ import { ArloLoader } from "@/components/ui/arlo-loader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { Id } from "../../convex/_generated/dataModel";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import type { Doc, Id } from "../../convex/_generated/dataModel";
+
+type GameRow = Doc<"games"> & { homeTeamName: string; awayTeamName: string; fieldName: string };
 
 export default function RefereeDashboardPage() {
   const games = useQuery(api.games.listMyAssignedGames);
   const acceptGame = useMutation(api.games.acceptGame);
+  const submitScore = useMutation(api.games.submitScore);
   const [acceptingId, setAcceptingId] = useState<Id<"games"> | null>(null);
+
+  const [scoringGame, setScoringGame] = useState<GameRow | null>(null);
+  const [homeScore, setHomeScore] = useState("");
+  const [awayScore, setAwayScore] = useState("");
+  const [scoreSubmitting, setScoreSubmitting] = useState(false);
+  const [scoreError, setScoreError] = useState<string | null>(null);
 
   if (games === undefined) {
     return (
@@ -32,6 +49,31 @@ export default function RefereeDashboardPage() {
       await acceptGame({ gameId });
     } finally {
       setAcceptingId(null);
+    }
+  }
+
+  function openScoreDialog(game: GameRow) {
+    setScoringGame(game);
+    setHomeScore("");
+    setAwayScore("");
+    setScoreError(null);
+  }
+
+  async function handleSubmitScore() {
+    if (!scoringGame || homeScore === "" || awayScore === "") return;
+    setScoreSubmitting(true);
+    setScoreError(null);
+    try {
+      await submitScore({
+        gameId: scoringGame._id,
+        homeScore: Number(homeScore),
+        awayScore: Number(awayScore),
+      });
+      setScoringGame(null);
+    } catch (e) {
+      setScoreError(e instanceof Error ? e.message : "Failed to submit score");
+    } finally {
+      setScoreSubmitting(false);
     }
   }
 
@@ -74,9 +116,50 @@ export default function RefereeDashboardPage() {
                 </Button>
               </CardContent>
             )}
+            {g.status === "REF_ASSIGNED" && (
+              <CardContent>
+                <Button className="w-full" onClick={() => openScoreDialog(g)}>
+                  Submit Score
+                </Button>
+              </CardContent>
+            )}
+            {g.status === "COMPLETED_WITH_SCORE" && (
+              <CardContent className="text-sm text-muted-foreground">
+                Final: {g.homeScore} - {g.awayScore}
+              </CardContent>
+            )}
           </Card>
         ))}
       </div>
+
+      <Dialog open={!!scoringGame} onOpenChange={(open) => !open && setScoringGame(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Submit Score{scoringGame ? `: ${scoringGame.homeTeamName} vs ${scoringGame.awayTeamName}` : ""}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center gap-3">
+            <div className="flex-1 space-y-1">
+              <label className="text-sm font-medium">{scoringGame?.homeTeamName ?? "Home"}</label>
+              <Input type="number" min={0} value={homeScore} onChange={(e) => setHomeScore(e.target.value)} />
+            </div>
+            <div className="flex-1 space-y-1">
+              <label className="text-sm font-medium">{scoringGame?.awayTeamName ?? "Away"}</label>
+              <Input type="number" min={0} value={awayScore} onChange={(e) => setAwayScore(e.target.value)} />
+            </div>
+          </div>
+          {scoreError && <p className="text-sm text-destructive">{scoreError}</p>}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setScoringGame(null)} disabled={scoreSubmitting}>
+              Cancel
+            </Button>
+            <Button onClick={handleSubmitScore} disabled={scoreSubmitting || homeScore === "" || awayScore === ""}>
+              {scoreSubmitting ? "Submitting…" : "Submit"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

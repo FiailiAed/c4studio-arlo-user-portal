@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getRoleConfig, type AppRole } from "@/lib/roles";
 
-const ROLES: AppRole[] = ["family", "referee", "program_admin", "league_admin", "super_admin"];
+const ROLES: AppRole[] = ["family", "referee", "program_admin", "coach", "league_admin", "super_admin"];
 
 type Status = "idle" | "submitting" | "success" | "error";
 

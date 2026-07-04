@@ -66,7 +66,8 @@ export default defineSchema({
 
   teams: defineTable({
     name: v.string(),
-  }).index("by_name", ["name"]),
+    clubId: v.optional(v.id("clubs")),
+  }).index("by_name", ["name"]).index("by_club", ["clubId"]),
 
   games: defineTable({
     homeTeamId: v.id("teams"),
@@ -84,6 +85,9 @@ export default defineSchema({
     createdBy: v.string(), // clerkId
     refereeId: v.optional(v.string()), // clerkId of assigned referee
     refereeAccepted: v.optional(v.boolean()),
+    homeScore: v.optional(v.number()),
+    awayScore: v.optional(v.number()),
+    scoreVerified: v.optional(v.boolean()),
   })
     .index("by_field_and_time", ["fieldId", "startTime"])
     .index("by_start_time", ["startTime"])
@@ -93,4 +97,14 @@ export default defineSchema({
     clerkId: v.string(),
     stripeConnectId: v.optional(v.string()),
   }).index("by_clerk_id", ["clerkId"]),
+
+  clubs: defineTable({
+    name: v.string(),
+    coachClerkId: v.optional(v.string()),
+  }).index("by_coach", ["coachClerkId"]),
+
+  rosters: defineTable({
+    teamId: v.id("teams"),
+    playerId: v.id("players"),
+  }).index("by_team", ["teamId"]).index("by_player", ["playerId"]),
 });

@@ -15,13 +15,19 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
+
+const SELECT_CLASSNAME =
+  "rounded-md border border-input bg-background px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring/50";
 
 export default function AdminTeamsPage() {
   const teams = useQuery(api.teams.listTeams);
+  const clubs = useQuery(api.clubs.listClubs);
   const createTeam = useMutation(api.teams.createTeam);
   const renameTeam = useMutation(api.teams.renameTeam);
   const deleteTeam = useMutation(api.teams.deleteTeam);
+  const assignTeamToClub = useMutation(api.teams.assignTeamToClub);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
@@ -33,7 +39,7 @@ export default function AdminTeamsPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
-  if (teams === undefined) {
+  if (teams === undefined || clubs === undefined) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <ArloLoader />
@@ -76,6 +82,10 @@ export default function AdminTeamsPage() {
     }
   }
 
+  async function handleClubChange(teamId: Id<"teams">, clubId: string) {
+    await assignTeamToClub({ teamId, clubId: clubId ? (clubId as Id<"clubs">) : undefined });
+  }
+
   const columns: DataTableColumn<Doc<"teams">>[] = [
     {
       key: "name",
@@ -87,6 +97,22 @@ export default function AdminTeamsPage() {
           onBlur={() => commitRename(team._id)}
           className="max-w-xs"
         />
+      ),
+    },
+    {
+      key: "club",
+      header: "Club",
+      render: (team) => (
+        <select
+          value={team.clubId ?? ""}
+          onChange={(e) => handleClubChange(team._id, e.target.value)}
+          className={cn(SELECT_CLASSNAME)}
+        >
+          <option value="">No club</option>
+          {clubs?.map((club) => (
+            <option key={club._id} value={club._id}>{club.name}</option>
+          ))}
+        </select>
       ),
     },
   ];

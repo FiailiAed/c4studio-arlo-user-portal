@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 import { getRoleConfig, hasAnyRole, type AppRole } from "@/lib/roles";
 import type { Doc } from "../../../convex/_generated/dataModel";
 
-const ROLES: AppRole[] = ["family", "referee", "program_admin", "league_admin", "super_admin"];
+const ROLES: AppRole[] = ["family", "referee", "program_admin", "coach", "league_admin", "super_admin"];
 
 type AdminUser = Doc<"users">;
 

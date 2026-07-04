@@ -170,3 +170,26 @@ export const acceptGame = mutation({
     await ctx.db.patch(args.gameId, { refereeAccepted: true, status: "REF_ASSIGNED" });
   },
 });
+
+export const submitScore = mutation({
+  args: {
+    gameId: v.id("games"),
+    homeScore: v.number(),
+    awayScore: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await requireRefereeMutation(ctx);
+
+    const game = await ctx.db.get(args.gameId);
+    if (!game) throw new Error("Game not found");
+    if (game.refereeId !== identity.subject) throw new Error("Forbidden");
+    if (game.status !== "REF_ASSIGNED") throw new Error("Game is not ready for a score");
+
+    await ctx.db.patch(args.gameId, {
+      homeScore: args.homeScore,
+      awayScore: args.awayScore,
+      scoreVerified: false,
+      status: "COMPLETED_WITH_SCORE",
+    });
+  },
+});

@@ -8,6 +8,8 @@
  * @module
  */
 
+import type * as clubs from "../clubs.js";
+import type * as coach from "../coach.js";
 import type * as customTables from "../customTables.js";
 import type * as fields from "../fields.js";
 import type * as games from "../games.js";
@@ -16,6 +18,7 @@ import type * as impersonation from "../impersonation.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as players from "../players.js";
 import type * as referees from "../referees.js";
+import type * as rosters from "../rosters.js";
 import type * as teams from "../teams.js";
 import type * as users from "../users.js";
 
@@ -26,6 +29,8 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  clubs: typeof clubs;
+  coach: typeof coach;
   customTables: typeof customTables;
   fields: typeof fields;
   games: typeof games;
@@ -34,6 +39,7 @@ declare const fullApi: ApiFromModules<{
   "lib/auth": typeof lib_auth;
   players: typeof players;
   referees: typeof referees;
+  rosters: typeof rosters;
   teams: typeof teams;
   users: typeof users;
 }>;

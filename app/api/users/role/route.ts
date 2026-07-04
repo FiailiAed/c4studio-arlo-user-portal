@@ -1,7 +1,7 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { hasAnyRole, type AppRole } from "@/lib/roles";
 
-const VALID_ROLES: AppRole[] = ["family", "referee", "program_admin", "league_admin", "super_admin"];
+const VALID_ROLES: AppRole[] = ["family", "referee", "program_admin", "coach", "league_admin", "super_admin"];
 
 export async function POST(request: Request) {
   const { sessionClaims } = await auth();

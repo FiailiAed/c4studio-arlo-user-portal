@@ -99,6 +99,7 @@ function AdminOverviewCard() {
     family: 0,
     referee: 0,
     program_admin: 0,
+    coach: 0,
     league_admin: 0,
     super_admin: 0,
   };

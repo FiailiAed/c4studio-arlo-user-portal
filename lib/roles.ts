@@ -1,4 +1,4 @@
-export type AppRole = "family" | "referee" | "program_admin" | "league_admin" | "super_admin";
+export type AppRole = "family" | "referee" | "program_admin" | "coach" | "league_admin" | "super_admin";
 
 export function hasAnyRole(roles: string[] | undefined, allowed: string[]): boolean {
   return !!roles?.some((r) => allowed.includes(r));
@@ -32,6 +32,15 @@ const ROLE_CONFIG: Record<AppRole, { label: string; description: string; permiss
       "View all registrations for your program",
     ],
   },
+  coach: {
+    label: "Coach",
+    description: "Manages a club's teams, rosters, and game results.",
+    permissions: [
+      "All Family permissions",
+      "View your team's schedule and roster",
+      "Verify game scores",
+    ],
+  },
   league_admin: {
     label: "League Admin",
     description: "Full access across all programs and users.",
@@ -58,7 +67,7 @@ export function getRoleConfig(role: string | undefined) {
 }
 
 export const DASHBOARD_PLACEHOLDERS: Record<
-  Exclude<AppRole, "league_admin" | "family" | "super_admin" | "referee">,
+  Exclude<AppRole, "league_admin" | "family" | "super_admin" | "referee" | "coach">,
   { title: string; description: string }
 > = {
   program_admin: {

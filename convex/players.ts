@@ -1,5 +1,16 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { requireLeagueAdminQuery } from "./lib/auth";
+
+export const listAllPlayers = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await requireLeagueAdminQuery(ctx);
+    if (!identity) return null;
+
+    return await ctx.db.query("players").collect();
+  },
+});
 
 export const listMyPlayers = query({
   args: {},
