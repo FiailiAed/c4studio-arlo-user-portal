@@ -9,6 +9,7 @@ import { ArloLoader } from "@/components/ui/arlo-loader";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import {
   Dialog,
   DialogContent,
@@ -20,8 +21,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { getRoleConfig, type AppRole } from "@/lib/roles";
+import type { Doc } from "../../../convex/_generated/dataModel";
 
 const ROLES: AppRole[] = ["family", "referee", "program_admin", "league_admin", "super_admin"];
+
+type AdminUser = Doc<"users">;
 
 export default function AdminUsersPage() {
   const { user: currentUser } = useUser();
@@ -203,6 +207,63 @@ export default function AdminUsersPage() {
 
   const visibleUsers = filteredUsers.filter((u) => !deletingIds.has(u.clerkId));
 
+  const columns: DataTableColumn<AdminUser>[] = [
+    {
+      key: "firstName",
+      header: "First Name",
+      render: (user) => user.firstName ?? <span className="text-muted-foreground">—</span>,
+    },
+    {
+      key: "lastName",
+      header: "Last Name",
+      render: (user) => user.lastName ?? <span className="text-muted-foreground">—</span>,
+    },
+    {
+      key: "email",
+      header: "Email",
+      render: (user) => user.email ?? <span className="text-muted-foreground">—</span>,
+    },
+    {
+      key: "role",
+      header: "Role",
+      render: (user) => {
+        const displayRole = (optimisticRoles[user.clerkId] ?? user.role) as AppRole | undefined;
+        const roleConfig = getRoleConfig(displayRole);
+        return roleConfig ? (
+          <Badge variant="secondary">{roleConfig.label}</Badge>
+        ) : (
+          <Badge variant="outline" className="text-muted-foreground">None</Badge>
+        );
+      },
+    },
+    {
+      key: "changeRole",
+      header: "Change Role",
+      render: (user) => {
+        const displayRole = (optimisticRoles[user.clerkId] ?? user.role) as AppRole | undefined;
+        return (
+          <div className="space-y-1">
+            <select
+              value={displayRole ?? ""}
+              onChange={(e) => handleRoleChange(user.clerkId, e.target.value as AppRole)}
+              className="rounded-md border border-input bg-background px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring/50"
+            >
+              <option value="" disabled>Select role…</option>
+              {ROLES.map((r) => (
+                <option key={r} value={r}>
+                  {getRoleConfig(r)?.label ?? r}
+                </option>
+              ))}
+            </select>
+            {errors[user.clerkId] && (
+              <p className="text-xs text-destructive">{errors[user.clerkId]}</p>
+            )}
+          </div>
+        );
+      },
+    },
+  ];
+
   return (
     <main className="flex flex-1 flex-col items-center py-12 px-4">
       <div className="w-full max-w-4xl space-y-6">
@@ -253,116 +314,54 @@ export default function AdminUsersPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="px-6 py-3 font-medium">
-                    <input
-                      type="checkbox"
-                      checked={visibleUsers.length > 0 && visibleUsers.every((u) => selected.has(u.clerkId))}
-                      onChange={toggleSelectAll}
-                      aria-label="Select all users"
-                    />
-                  </th>
-                  <th className="px-6 py-3 font-medium">First Name</th>
-                  <th className="px-6 py-3 font-medium">Last Name</th>
-                  <th className="px-6 py-3 font-medium">Email</th>
-                  <th className="px-6 py-3 font-medium">Role</th>
-                  <th className="px-6 py-3 font-medium">Change Role</th>
-                  <th className="px-6 py-3 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleUsers.map((user) => {
-                  const displayRole = (optimisticRoles[user.clerkId] ?? user.role) as AppRole | undefined;
-                  const roleConfig = getRoleConfig(displayRole);
-                  return (
-                    <tr key={user._id} className="border-b last:border-0">
-                      <td className="px-6 py-3">
-                        <input
-                          type="checkbox"
-                          checked={selected.has(user.clerkId)}
-                          onChange={() => toggleSelected(user.clerkId)}
-                          aria-label={`Select ${user.firstName ?? user.clerkId}`}
-                        />
-                      </td>
-                      <td className="px-6 py-3">{user.firstName ?? <span className="text-muted-foreground">—</span>}</td>
-                      <td className="px-6 py-3">{user.lastName ?? <span className="text-muted-foreground">—</span>}</td>
-                      <td className="px-6 py-3">{user.email ?? <span className="text-muted-foreground">—</span>}</td>
-                      <td className="px-6 py-3">
-                        {roleConfig ? (
-                          <Badge variant="secondary">{roleConfig.label}</Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-muted-foreground">None</Badge>
-                        )}
-                      </td>
-                      <td className="px-6 py-3">
-                        <div className="space-y-1">
-                          <select
-                            value={displayRole ?? ""}
-                            onChange={(e) => handleRoleChange(user.clerkId, e.target.value as AppRole)}
-                            className="rounded-md border border-input bg-background px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring/50"
-                          >
-                            <option value="" disabled>Select role…</option>
-                            {ROLES.map((r) => (
-                              <option key={r} value={r}>
-                                {getRoleConfig(r)?.label ?? r}
-                              </option>
-                            ))}
-                          </select>
-                          {errors[user.clerkId] && (
-                            <p className="text-xs text-destructive">{errors[user.clerkId]}</p>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-3">
-                        <div className="flex gap-2">
-                          {myRole === "super_admin" && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={user.clerkId === currentUser?.id}
-                              onClick={() =>
-                                requestImpersonate(
-                                  user.clerkId,
-                                  [user.firstName, user.lastName].filter(Boolean).join(" ") ||
-                                    user.email ||
-                                    user.clerkId
-                                )
-                              }
-                            >
-                              Impersonate
-                            </Button>
-                          )}
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            disabled={user.clerkId === currentUser?.id}
-                            onClick={() =>
-                              requestDelete(
-                                user.clerkId,
-                                [user.firstName, user.lastName].filter(Boolean).join(" ") ||
-                                  user.email ||
-                                  user.clerkId
-                              )
-                            }
-                          >
-                            Delete
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {visibleUsers.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="px-6 py-6 text-center text-muted-foreground">
-                      {search.trim() ? "No users match your search." : "No users found."}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+            <DataTable
+              columns={columns}
+              rows={visibleUsers}
+              getRowKey={(user) => user.clerkId}
+              emptyMessage={search.trim() ? "No users match your search." : "No users found."}
+              selection={{
+                isSelected: (user) => selected.has(user.clerkId),
+                onToggle: (user) => toggleSelected(user.clerkId),
+                isAllSelected: visibleUsers.length > 0 && visibleUsers.every((u) => selected.has(u.clerkId)),
+                onToggleAll: toggleSelectAll,
+              }}
+              renderActions={(user) => (
+                <div className="flex gap-2">
+                  {myRole === "super_admin" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={user.clerkId === currentUser?.id}
+                      onClick={() =>
+                        requestImpersonate(
+                          user.clerkId,
+                          [user.firstName, user.lastName].filter(Boolean).join(" ") ||
+                            user.email ||
+                            user.clerkId
+                        )
+                      }
+                    >
+                      Impersonate
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    disabled={user.clerkId === currentUser?.id}
+                    onClick={() =>
+                      requestDelete(
+                        user.clerkId,
+                        [user.firstName, user.lastName].filter(Boolean).join(" ") ||
+                          user.email ||
+                          user.clerkId
+                      )
+                    }
+                  >
+                    Delete
+                  </Button>
+                </div>
+              )}
+            />
           </CardContent>
         </Card>
       </div>
