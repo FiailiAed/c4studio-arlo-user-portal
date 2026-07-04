@@ -4,6 +4,7 @@ import { useQuery, useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "../../../convex/_generated/api";
+import { AddressAutocomplete } from "@/components/address-autocomplete";
 import { ArloLoader } from "@/components/ui/arlo-loader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -113,11 +114,11 @@ export default function EditProfilePage() {
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="street">Street</Label>
-                  <Input
+                  <AddressAutocomplete
                     id="street"
                     value={form.street}
-                    onChange={set("street")}
-                    placeholder="123 Main St"
+                    onChange={(value) => setForm((prev) => ({ ...prev, street: value }))}
+                    onSelect={(address) => setForm((prev) => ({ ...prev, ...address }))}
                   />
                 </div>
                 <div className="grid grid-cols-3 gap-4">
