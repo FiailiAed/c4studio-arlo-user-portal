@@ -45,6 +45,8 @@ http.route({
         email: email_addresses?.[0]?.email_address,
         role: public_metadata?.role,
       });
+    } else if (event.type === "user.deleted") {
+      await ctx.runMutation(internal.users.deleteByClerkId, { clerkId: event.data.id });
     }
 
     return new Response(null, { status: 200 });

@@ -97,6 +97,17 @@ export const listAll = query({
   },
 });
 
+export const deleteByClerkId = internalMutation({
+  args: { clerkId: v.string() },
+  handler: async (ctx, { clerkId }) => {
+    const existing = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", clerkId))
+      .unique();
+    if (existing) await ctx.db.delete(existing._id);
+  },
+});
+
 export const syncFromWebhook = internalMutation({
   args: {
     clerkId: v.string(),
