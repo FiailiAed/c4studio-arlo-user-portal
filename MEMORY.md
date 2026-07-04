@@ -66,7 +66,9 @@ Both tokens must include `"metadata": "{{user.public_metadata}}"` for role check
 
 **Role pre-assignment flow (new user via invite)**: `POST /api/users/invite` (server route) → `clerkClient().invitations.createInvitation({ emailAddress, publicMetadata: { role } })` → Clerk emails the invite → on acceptance/signup, Clerk automatically copies the invitation's `publicMetadata` onto the new `User.publicMetadata` → Clerk fires `user.created` (same webhook as above) → `syncFromWebhook` picks up `role` with zero extra Convex code. No admin follow-up needed after the invite is sent.
 
-Webhook is registered and live (`/clerk-webhook` on Convex). Required `CLERK_WEBHOOK_SECRET` to be set both in `.env.local` **and** in the Convex dashboard's environment variables — missing it on the Convex side was why the webhook initially failed.
+**Deletion flow**: `POST /api/users/delete` (server route, blocks self-deletion) → `clerkClient().users.deleteUser()` → Clerk fires `user.deleted` on the **same** webhook endpoint (`/clerk-webhook` — one endpoint subscribed to multiple event types, not a second webhook) → `deleteByClerkId` internalMutation removes the matching Convex `users` row.
+
+Webhook is registered and live (`/clerk-webhook` on Convex), subscribed to `user.created`, `user.updated`, and `user.deleted`. Required `CLERK_WEBHOOK_SECRET` to be set both in `.env.local` **and** in the Convex dashboard's environment variables — missing it on the Convex side was why the webhook initially failed.
 
 ---
 
@@ -114,10 +116,11 @@ if (!identity) return null; // NOT throw new Error("Unauthorized")
 │   │   └── invite/page.tsx     # /admin/invite — Send a Clerk email invite with a pre-assigned role
 │   └── api/
 │       ├── users/role/route.ts   # Server route: update Clerk publicMetadata.role
-│       └── users/invite/route.ts # Server route: create a Clerk invitation with publicMetadata.role preset
+│       ├── users/invite/route.ts # Server route: create a Clerk invitation with publicMetadata.role preset
+│       └── users/delete/route.ts # Server route: delete a Clerk user (blocks self-deletion)
 ├── convex/
 │   ├── schema.ts               # users table
-│   ├── users.ts                # getCurrentUser, upsertUser, updateProfile, listAll, syncFromWebhook
+│   ├── users.ts                # getCurrentUser, upsertUser, updateProfile, listAll, syncFromWebhook, deleteByClerkId
 │   ├── http.ts                 # Clerk webhook handler at /clerk-webhook
 │   └── auth.config.ts          # Links to Clerk JWT template "convex"
 └── lib/
@@ -182,6 +185,7 @@ users: defineTable({
 | Admin table empty (no names/emails) | `upsertUser` returned early on existing records without updating | Changed to always patch `firstName`/`lastName`/`email`; effect runs every login |
 | Debug route breaks production build | Top-level `throw` evaluated at build time | Never use top-level throws for env guards; gate inside the handler |
 | Clerk webhook returned 400/failed silently | `CLERK_WEBHOOK_SECRET` was only set in `.env.local`, not in Convex's own environment variables (Convex HTTP actions run in Convex's environment, not Next.js's) | Add the secret to the Convex dashboard env vars too |
+| Invite emails linked to Clerk's hosted Account Portal (`*.accounts.dev/sign-up`) instead of our app | `createInvitation` was called without `redirectUrl`, so Clerk fell back to its default Account Portal domain | Pass `redirectUrl: new URL("/sign-up", request.url).toString()` — Clerk appends the invitation ticket, and `<SignUp />` on our `/sign-up` page handles ticket-based sign-up automatically |
 
 ---
 
@@ -205,4 +209,6 @@ Same vars needed in Vercel environment variables (except `CONVEX_DEPLOYMENT` is 
 
 ## Pending Work
 
-All items from the original list are complete: the Clerk webhook is registered and live, `CLERK_WEBHOOK_SECRET` is set in both `.env.local` and the Convex dashboard, `convex/migrations.ts` has been deleted, and `adminrolemanagement.patch` was already removed. Branch `feat/admin-role-management` is ready to merge to `main` pending final review.
+All items from the original `feat/admin-role-management` list are complete: the Clerk webhook is registered and live, `CLERK_WEBHOOK_SECRET` is set in both `.env.local` and the Convex dashboard, `convex/migrations.ts` has been deleted, and `adminrolemanagement.patch` was already removed.
+
+**One manual Clerk Dashboard step still needed** (not code — from `feat/admin-dashboard`'s delete-users work): enable the `user.deleted` event on the existing `/clerk-webhook` subscription (Clerk Dashboard → Webhooks → the existing endpoint → add event type). Until this is done, deleting a user via `/admin/users` removes them from Clerk immediately but leaves a stale row in Convex `users` until manually cleaned up.

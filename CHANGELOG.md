@@ -18,11 +18,20 @@ Project history is tracked through git branches. Each branch represents a featur
 - **`app/admin/loader/`** — Removed entirely (no longer needed). It briefly existed inside a `(dashboard)` route group so the admin nav wouldn't wrap it; once the page itself was deleted, the route group was flattened back to a plain `app/admin/layout.tsx`/`page.tsx`/`users/page.tsx` structure.
 - **`app/api/users/invite/route.ts`** (new) — `league_admin`-only route that calls `clerkClient().invitations.createInvitation({ emailAddress, publicMetadata: { role } })`. Clerk emails the invite and, on acceptance, automatically copies that `publicMetadata` onto the new user — the existing `user.created` webhook then syncs `role` into Convex with no new backend code. Returns 403 (wrong role), 400 (invalid email/role), or 409 (duplicate invite/existing account).
 - **`app/admin/invite/page.tsx`** (new, route is `/admin/invite`) — Email + role form posting to the new route, with inline success/duplicate/error states. Added to the admin nav (`app/admin/layout.tsx`) and as a third quick-link card on `/admin`.
+- **`app/admin/users/page.tsx`** — Added an "Invite User" link in the page header (admins expect a way to invite from the same page they manage users, not just via nav) and a "Delete" button per row, gated behind a new `components/ui/dialog.tsx` (shadcn) confirmation dialog. Self-deletion is disabled client-side (mirrors the server-side guard).
+- **`app/api/users/delete/route.ts`** (new) — `league_admin`-only route calling `clerkClient().users.deleteUser()`. Blocks a caller from deleting their own account (400). Clerk fires `user.deleted` on the same `/clerk-webhook` endpoint already used for role sync — one endpoint handling multiple event types, not a second webhook.
+- **`convex/users.ts`** — Added `deleteByClerkId` internal mutation (removes the matching `users` row, no-ops if already gone).
+- **`convex/http.ts`** — Added a `user.deleted` branch to the existing webhook handler, calling `deleteByClerkId`.
+
+### Bugs fixed
+
+- **Invite emails linked to Clerk's hosted Account Portal** (`*.accounts.dev/sign-up`) instead of this app's own `/sign-up` page: `createInvitation` was missing `redirectUrl`. Fixed by passing `redirectUrl: new URL("/sign-up", request.url).toString()` — Clerk appends the invitation ticket, and the existing `<SignUp />` component handles ticket-based sign-up automatically.
 
 ### Notes
 
-- No Convex schema or query changes — purely a UI/routing reorganization.
+- No Convex schema changes — `deleteByClerkId` uses the existing `users` table/index.
 - No `proxy.ts` changes needed — `/admin(.*)` was already gated to `league_admin`, redirecting elsewhere to `/dashboard`.
+- **Manual step required, not yet done**: enable `user.deleted` on the existing Clerk webhook subscription in the dashboard (see `MEMORY.md` → Pending Work) — without it, deletions remove the Clerk account but leave a stale Convex row.
 
 ---
 
