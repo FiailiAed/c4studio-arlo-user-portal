@@ -172,8 +172,6 @@ export default function AdminUsersPage() {
       return next;
     });
 
-    sessionStorage.setItem("adminSessionId", clerk.session?.id ?? "");
-
     const res = await fetch("/api/admin/impersonate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -188,6 +186,10 @@ export default function AdminUsersPage() {
     }
 
     const { url } = await res.json();
+    // Clerk won't redeem a sign-in ticket while a session is already active
+    // (that requires the paid multi-session feature) — sign out first so the
+    // ticket lands as a normal sign-in into the target account.
+    await clerk.signOut();
     window.location.href = url;
   }
 

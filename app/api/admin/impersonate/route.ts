@@ -28,6 +28,17 @@ export async function POST(request: Request) {
     return new Response("Failed to start impersonation", { status: status === 404 ? 404 : 500 });
   }
 
+  if (!actorToken.token) {
+    return new Response("Failed to start impersonation", { status: 500 });
+  }
+
+  // actorTokens.create() has no redirectUrl param, so actorToken.url defaults to
+  // Clerk's hosted Account Portal instead of this app's own /sign-in page. Build
+  // our own ticket-redemption URL instead, the way invitations use redirectUrl.
+  const redemptionUrl = new URL("/sign-in", request.url);
+  redemptionUrl.searchParams.set("__clerk_ticket", actorToken.token);
+  redemptionUrl.searchParams.set("redirect_url", "/dashboard");
+
   try {
     const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
     const token = await authResult.getToken({ template: "convex" });
@@ -37,5 +48,5 @@ export async function POST(request: Request) {
     console.error("Failed to log impersonation event", err);
   }
 
-  return Response.json({ url: actorToken.url });
+  return Response.json({ url: redemptionUrl.toString() });
 }

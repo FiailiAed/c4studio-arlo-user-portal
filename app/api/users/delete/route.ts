@@ -4,7 +4,7 @@ import type { AppRole } from "@/lib/roles";
 export async function POST(request: Request) {
   const { userId: callerId, sessionClaims } = await auth();
   const callerRole = (sessionClaims?.metadata as { role?: AppRole } | undefined)?.role;
-  if (callerRole !== "league_admin") {
+  if (callerRole !== "league_admin" && callerRole !== "super_admin") {
     return new Response("Forbidden", { status: 403 });
   }
 

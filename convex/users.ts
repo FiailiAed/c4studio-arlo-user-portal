@@ -85,12 +85,12 @@ export const listAll = query({
 
     const jwtRole = (identity["metadata"] as { role?: string } | undefined)?.role;
 
-    if (jwtRole !== "league_admin") {
+    if (jwtRole !== "league_admin" && jwtRole !== "super_admin") {
       const caller = await ctx.db
         .query("users")
         .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
         .unique();
-      if (caller?.role !== "league_admin") throw new Error("Forbidden");
+      if (caller?.role !== "league_admin" && caller?.role !== "super_admin") throw new Error("Forbidden");
     }
 
     return await ctx.db.query("users").collect();
