@@ -1,5 +1,6 @@
 import { internalMutation, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { requireLeagueAdminQuery } from "./lib/auth";
 
 export const getCurrentUser = query({
   args: {},
@@ -78,20 +79,8 @@ export const updateProfile = mutation({
 export const listAll = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    // Return null rather than throw — Convex re-runs the query once the auth
-    // token arrives. Throwing leaves useQuery permanently errored on fast loads.
+    const identity = await requireLeagueAdminQuery(ctx);
     if (!identity) return null;
-
-    const jwtRole = (identity["metadata"] as { role?: string } | undefined)?.role;
-
-    if (jwtRole !== "league_admin" && jwtRole !== "super_admin") {
-      const caller = await ctx.db
-        .query("users")
-        .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
-        .unique();
-      if (caller?.role !== "league_admin" && caller?.role !== "super_admin") throw new Error("Forbidden");
-    }
 
     return await ctx.db.query("users").collect();
   },

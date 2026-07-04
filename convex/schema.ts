@@ -58,4 +58,31 @@ export default defineSchema({
     targetClerkId: v.string(),
     startedAt: v.number(),
   }).index("by_admin", ["adminClerkId"]).index("by_target", ["targetClerkId"]),
+
+  fields: defineTable({
+    name: v.string(),
+    location: v.optional(v.string()),
+  }).index("by_name", ["name"]),
+
+  teams: defineTable({
+    name: v.string(),
+  }).index("by_name", ["name"]),
+
+  games: defineTable({
+    homeTeamId: v.id("teams"),
+    awayTeamId: v.id("teams"),
+    fieldId: v.id("fields"),
+    startTime: v.number(), // unix ms
+    status: v.union(
+      v.literal("SCHEDULED"),
+      v.literal("PENDING_ASSIGNMENT"),
+      v.literal("REF_ASSIGNED"),
+      v.literal("COMPLETED_WITH_SCORE"),
+      v.literal("DISPUTED"),
+      v.literal("CANCELLED")
+    ),
+    createdBy: v.string(), // clerkId
+  })
+    .index("by_field_and_time", ["fieldId", "startTime"])
+    .index("by_start_time", ["startTime"]),
 });
