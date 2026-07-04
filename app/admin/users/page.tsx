@@ -2,12 +2,14 @@
 
 import { useQuery } from "convex/react";
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { api } from "../../../convex/_generated/api";
 import { ArloLoader } from "@/components/ui/arlo-loader";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import { getRoleConfig, type AppRole } from "@/lib/roles";
 
 const ROLES: AppRole[] = ["family", "referee", "program_admin", "league_admin"];
@@ -115,7 +117,12 @@ export default function AdminUsersPage() {
   return (
     <main className="flex flex-1 flex-col items-center py-12 px-4">
       <div className="w-full max-w-4xl space-y-6">
-        <h1 className="text-2xl font-semibold">User Management</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold">User Management</h1>
+          <Link href="/admin/invite" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+            Invite User
+          </Link>
+        </div>
 
         <Input
           type="search"
