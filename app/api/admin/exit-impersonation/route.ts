@@ -20,7 +20,7 @@ export async function POST(request: Request) {
 
   const redemptionUrl = new URL("/sign-in", request.url);
   redemptionUrl.searchParams.set("__clerk_ticket", signInToken.token);
-  redemptionUrl.searchParams.set("redirect_url", "/dashboard");
+  redemptionUrl.searchParams.set("redirect_url", "/admin/users");
 
   return Response.json({ url: redemptionUrl.toString() });
 }
