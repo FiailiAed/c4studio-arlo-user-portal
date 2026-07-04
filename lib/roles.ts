@@ -54,13 +54,9 @@ export function getRoleConfig(role: string | undefined) {
 }
 
 export const DASHBOARD_PLACEHOLDERS: Record<
-  Exclude<AppRole, "league_admin" | "family" | "super_admin">,
+  Exclude<AppRole, "league_admin" | "family" | "super_admin" | "referee">,
   { title: string; description: string }
 > = {
-  referee: {
-    title: "Game Schedules",
-    description: "View and manage your game assignments soon.",
-  },
   program_admin: {
     title: "Program Rosters",
     description: "Manage your program's rosters soon.",

@@ -18,7 +18,8 @@ export default defineSchema({
         zip: v.string(),
       })
     ),
-  }).index("by_clerk_id", ["clerkId"]),
+  }).index("by_clerk_id", ["clerkId"])
+    .index("by_role", ["role"]),
 
   players: defineTable({
     guardianClerkId: v.string(),
@@ -82,7 +83,15 @@ export default defineSchema({
       v.literal("CANCELLED")
     ),
     createdBy: v.string(), // clerkId
+    refereeId: v.optional(v.string()), // clerkId of assigned referee
+    refereeAccepted: v.optional(v.boolean()),
   })
     .index("by_field_and_time", ["fieldId", "startTime"])
-    .index("by_start_time", ["startTime"]),
+    .index("by_start_time", ["startTime"])
+    .index("by_referee", ["refereeId"]),
+
+  refereeProfiles: defineTable({
+    clerkId: v.string(),
+    stripeConnectId: v.optional(v.string()),
+  }).index("by_clerk_id", ["clerkId"]),
 });

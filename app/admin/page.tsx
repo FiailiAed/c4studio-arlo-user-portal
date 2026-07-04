@@ -2,6 +2,7 @@
 
 import { useQuery } from "convex/react";
 import Link from "next/link";
+import { useState } from "react";
 import { api } from "../../convex/_generated/api";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -14,6 +15,7 @@ export default function AdminPage() {
     <main className="flex flex-1 flex-col items-center py-12 px-4">
       <div className="w-full max-w-2xl space-y-6">
         <h1 className="text-2xl font-semibold">Admin Dashboard</h1>
+        <ArloAlertCard />
         <AdminOverviewCard />
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
@@ -39,6 +41,52 @@ export default function AdminPage() {
         </Card>
       </div>
     </main>
+  );
+}
+
+const ALERT_WINDOW_MS = 48 * 60 * 60 * 1000;
+
+function ArloAlertCard() {
+  const games = useQuery(api.games.listGames, {});
+  const [now] = useState(() => Date.now());
+
+  if (!games) return null;
+
+  const atRisk = games
+    .filter((g) => g.status === "PENDING_ASSIGNMENT" && g.startTime - now < ALERT_WINDOW_MS && g.startTime > now)
+    .sort((a, b) => a.startTime - b.startTime);
+
+  if (atRisk.length === 0) return null;
+
+  return (
+    <Card className="border-red-600 bg-red-50 dark:bg-red-950/30">
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle className="text-base text-red-700 dark:text-red-400">
+            ARLO Alert: {atRisk.length} game{atRisk.length === 1 ? "" : "s"} need a referee
+          </CardTitle>
+          <CardDescription className="text-red-700/80 dark:text-red-400/80">
+            Kickoff is within 48 hours and no referee has accepted yet.
+          </CardDescription>
+        </div>
+        <Link href="/admin/schedule" className={cn(buttonVariants({ variant: "destructive", size: "sm" }))}>
+          Open Schedule
+        </Link>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {atRisk.map((g) => (
+          <div
+            key={g._id}
+            className="flex items-center justify-between rounded-md border border-red-200 bg-white px-3 py-2 text-sm dark:border-red-900 dark:bg-transparent"
+          >
+            <span>
+              {g.homeTeamName} vs {g.awayTeamName} — {g.fieldName}
+            </span>
+            <span className="text-muted-foreground">{new Date(g.startTime).toLocaleString()}</span>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   );
 }
 

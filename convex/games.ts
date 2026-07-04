@@ -1,10 +1,15 @@
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
-import { requireLeagueAdminMutation, requireLeagueAdminQuery } from "./lib/auth";
+import {
+  requireLeagueAdminMutation,
+  requireLeagueAdminQuery,
+  requireRefereeMutation,
+  requireRefereeQuery,
+} from "./lib/auth";
 import type { Id } from "./_generated/dataModel";
 
 // Games occupy a fixed 2-hour slot on a field; no separate duration field yet.
-const SLOT_MS = 2 * 60 * 60 * 1000;
+export const SLOT_MS = 2 * 60 * 60 * 1000;
 
 async function assertNoFieldConflict(
   ctx: QueryCtx,
@@ -45,16 +50,23 @@ export const listGames = query({
 
     const results = [];
     for (const game of games) {
-      const [homeTeam, awayTeam, field] = await Promise.all([
+      const [homeTeam, awayTeam, field, referee] = await Promise.all([
         ctx.db.get(game.homeTeamId),
         ctx.db.get(game.awayTeamId),
         ctx.db.get(game.fieldId),
+        game.refereeId
+          ? ctx.db
+              .query("users")
+              .withIndex("by_clerk_id", (q) => q.eq("clerkId", game.refereeId as string))
+              .unique()
+          : null,
       ]);
       results.push({
         ...game,
         homeTeamName: homeTeam?.name ?? "Unknown team",
         awayTeamName: awayTeam?.name ?? "Unknown team",
         fieldName: field?.name ?? "Unknown field",
+        refereeName: referee ? `${referee.firstName ?? ""} ${referee.lastName ?? ""}`.trim() || referee.email : undefined,
       });
     }
     return results;
@@ -78,7 +90,7 @@ export const createGame = mutation({
       awayTeamId: args.awayTeamId,
       fieldId: args.fieldId,
       startTime: args.startTime,
-      status: "SCHEDULED",
+      status: "PENDING_ASSIGNMENT",
       createdBy: identity.subject,
     });
   },
@@ -114,5 +126,47 @@ export const cancelGame = mutation({
     if (!game) throw new Error("Game not found");
 
     await ctx.db.patch(args.gameId, { status: "CANCELLED" });
+  },
+});
+
+export const listMyAssignedGames = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await requireRefereeQuery(ctx);
+    if (!identity) return null;
+
+    const games = await ctx.db
+      .query("games")
+      .withIndex("by_referee", (q) => q.eq("refereeId", identity.subject))
+      .collect();
+
+    const results = [];
+    for (const game of games) {
+      const [homeTeam, awayTeam, field] = await Promise.all([
+        ctx.db.get(game.homeTeamId),
+        ctx.db.get(game.awayTeamId),
+        ctx.db.get(game.fieldId),
+      ]);
+      results.push({
+        ...game,
+        homeTeamName: homeTeam?.name ?? "Unknown team",
+        awayTeamName: awayTeam?.name ?? "Unknown team",
+        fieldName: field?.name ?? "Unknown field",
+      });
+    }
+    return results;
+  },
+});
+
+export const acceptGame = mutation({
+  args: { gameId: v.id("games") },
+  handler: async (ctx, args) => {
+    const identity = await requireRefereeMutation(ctx);
+
+    const game = await ctx.db.get(args.gameId);
+    if (!game) throw new Error("Game not found");
+    if (game.refereeId !== identity.subject) throw new Error("Forbidden");
+
+    await ctx.db.patch(args.gameId, { refereeAccepted: true, status: "REF_ASSIGNED" });
   },
 });

@@ -43,6 +43,8 @@ export default function DashboardPage() {
           <AdminLinkCard />
         ) : role === "family" ? (
           <PlayersLinkCard />
+        ) : role === "referee" ? (
+          <RefereeLinkCard />
         ) : (
           <RolePlaceholderCard role={role} />
         )}
@@ -54,7 +56,7 @@ export default function DashboardPage() {
 function RolePlaceholderCard({
   role,
 }: {
-  role: Exclude<AppRole, "league_admin" | "family" | "super_admin"> | undefined;
+  role: Exclude<AppRole, "league_admin" | "family" | "super_admin" | "referee"> | undefined;
 }) {
   const placeholder = role ? DASHBOARD_PLACEHOLDERS[role] : undefined;
 
@@ -98,6 +100,22 @@ function PlayersLinkCard() {
           <CardDescription>Add and manage your players&apos; profiles.</CardDescription>
         </div>
         <Link href="/players" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+          Open
+        </Link>
+      </CardHeader>
+    </Card>
+  );
+}
+
+function RefereeLinkCard() {
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle className="text-base">Game Schedules</CardTitle>
+          <CardDescription>View your assignments and accept upcoming games.</CardDescription>
+        </div>
+        <Link href="/referee" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
           Open
         </Link>
       </CardHeader>

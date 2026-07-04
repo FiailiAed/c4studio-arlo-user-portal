@@ -15,6 +15,7 @@ import type * as http from "../http.js";
 import type * as impersonation from "../impersonation.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as players from "../players.js";
+import type * as referees from "../referees.js";
 import type * as teams from "../teams.js";
 import type * as users from "../users.js";
 
@@ -32,6 +33,7 @@ declare const fullApi: ApiFromModules<{
   impersonation: typeof impersonation;
   "lib/auth": typeof lib_auth;
   players: typeof players;
+  referees: typeof referees;
   teams: typeof teams;
   users: typeof users;
 }>;

@@ -20,7 +20,12 @@ import { cn } from "@/lib/utils";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 
 type GameStatus = Doc<"games">["status"];
-type GameRow = Doc<"games"> & { homeTeamName: string; awayTeamName: string; fieldName: string };
+type GameRow = Doc<"games"> & {
+  homeTeamName: string;
+  awayTeamName: string;
+  fieldName: string;
+  refereeName?: string;
+};
 
 const SELECT_CLASSNAME =
   "rounded-md border border-input bg-background px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring/50";
@@ -48,6 +53,7 @@ export default function AdminSchedulePage() {
   const createGame = useMutation(api.games.createGame);
   const updateGameSlot = useMutation(api.games.updateGameSlot);
   const cancelGame = useMutation(api.games.cancelGame);
+  const assignReferee = useMutation(api.referees.assignReferee);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [homeTeamId, setHomeTeamId] = useState<string>("");
@@ -65,6 +71,15 @@ export default function AdminSchedulePage() {
 
   const [pendingCancel, setPendingCancel] = useState<GameRow | null>(null);
   const [cancelSubmitting, setCancelSubmitting] = useState(false);
+
+  const [assigningGame, setAssigningGame] = useState<GameRow | null>(null);
+  const [assignRefereeId, setAssignRefereeId] = useState<string>("");
+  const [assignSubmitting, setAssignSubmitting] = useState(false);
+
+  const availableRefs = useQuery(
+    api.referees.getAvailableRefs,
+    assigningGame ? { gameId: assigningGame._id } : "skip"
+  );
 
   if (games === undefined || teams === undefined || fields === undefined) {
     return (
@@ -131,6 +146,28 @@ export default function AdminSchedulePage() {
     }
   }
 
+  function openAssign(game: GameRow) {
+    setAssigningGame(game);
+    setAssignRefereeId("");
+  }
+
+  function handleAutoAssign() {
+    if (availableRefs && availableRefs.length > 0) {
+      setAssignRefereeId(availableRefs[0].clerkId);
+    }
+  }
+
+  async function handleAssignSubmit() {
+    if (!assigningGame || !assignRefereeId) return;
+    setAssignSubmitting(true);
+    try {
+      await assignReferee({ gameId: assigningGame._id, refereeClerkId: assignRefereeId });
+      setAssigningGame(null);
+    } finally {
+      setAssignSubmitting(false);
+    }
+  }
+
   async function confirmCancel() {
     if (!pendingCancel) return;
     setCancelSubmitting(true);
@@ -150,6 +187,18 @@ export default function AdminSchedulePage() {
       key: "status",
       header: "Status",
       render: (g) => <Badge variant={STATUS_VARIANT[g.status]}>{g.status.replace(/_/g, " ")}</Badge>,
+    },
+    {
+      key: "referee",
+      header: "Referee",
+      render: (g) =>
+        !g.refereeId ? (
+          <Badge variant="destructive">Unassigned</Badge>
+        ) : g.refereeAccepted ? (
+          <Badge variant="default">{g.refereeName}</Badge>
+        ) : (
+          <Badge variant="outline">Pending acceptance</Badge>
+        ),
     },
   ];
 
@@ -188,6 +237,9 @@ export default function AdminSchedulePage() {
           emptyMessage="No games scheduled yet."
           renderActions={(g) => (
             <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => openAssign(g)} disabled={g.status === "CANCELLED"}>
+                Assign Referee
+              </Button>
               <Button size="sm" variant="outline" onClick={() => openEdit(g)} disabled={g.status === "CANCELLED"}>
                 Edit Slot
               </Button>
@@ -275,6 +327,50 @@ export default function AdminSchedulePage() {
             </Button>
             <Button onClick={handleEditSubmit} disabled={editSubmitting}>
               {editSubmitting ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!assigningGame} onOpenChange={(open) => !open && setAssigningGame(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign Referee</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            {availableRefs === undefined ? (
+              <p className="text-sm text-muted-foreground">Loading available referees…</p>
+            ) : availableRefs === null || availableRefs.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No conflict-free referees available for this slot.</p>
+            ) : (
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium">Referee</label>
+                  <Button type="button" size="sm" variant="outline" onClick={handleAutoAssign}>
+                    Auto-Assign
+                  </Button>
+                </div>
+                <select
+                  value={assignRefereeId}
+                  onChange={(e) => setAssignRefereeId(e.target.value)}
+                  className={cn(SELECT_CLASSNAME, "w-full")}
+                >
+                  <option value="" disabled>Select…</option>
+                  {availableRefs.map((ref) => (
+                    <option key={ref._id} value={ref.clerkId}>
+                      {`${ref.firstName ?? ""} ${ref.lastName ?? ""}`.trim() || ref.email || ref.clerkId}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssigningGame(null)} disabled={assignSubmitting}>
+              Cancel
+            </Button>
+            <Button onClick={handleAssignSubmit} disabled={assignSubmitting || !assignRefereeId}>
+              {assignSubmitting ? "Assigning…" : "Assign"}
             </Button>
           </DialogFooter>
         </DialogContent>
