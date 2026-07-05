@@ -23,6 +23,10 @@ import type { Doc } from "../../../../convex/_generated/dataModel";
 
 const ROLES: AppRole[] = ["family", "referee", "program_admin", "coach", "league_admin", "super_admin"];
 
+function filenameToTitle(filename: string): string {
+  return filename.replace(/\.[^./]+$/, "");
+}
+
 type DocumentRow = Doc<"documents"> & { url: string | null; acknowledgmentCount: number };
 
 export default function AdminDocumentsPage() {
@@ -35,6 +39,7 @@ export default function AdminDocumentsPage() {
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("");
   const [requiredForRoles, setRequiredForRoles] = useState<AppRole[]>([]);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
@@ -54,8 +59,14 @@ export default function AdminDocumentsPage() {
   }
 
   async function handleUpload() {
-    const file = fileInputRef.current?.files?.[0];
-    if (!title.trim() || !file) return;
+    if (!title.trim()) {
+      setUploadError("Enter a title before uploading.");
+      return;
+    }
+    if (!selectedFile) {
+      setUploadError("Choose a file before uploading.");
+      return;
+    }
 
     setUploading(true);
     setUploadError(null);
@@ -63,8 +74,8 @@ export default function AdminDocumentsPage() {
       const uploadUrl = await generateUploadUrl();
       const res = await fetch(uploadUrl, {
         method: "POST",
-        headers: { "Content-Type": file.type },
-        body: file,
+        headers: { "Content-Type": selectedFile.type },
+        body: selectedFile,
       });
       if (!res.ok) throw new Error("File upload failed");
       const { storageId } = await res.json();
@@ -79,6 +90,7 @@ export default function AdminDocumentsPage() {
       setTitle("");
       setCategory("");
       setRequiredForRoles([]);
+      setSelectedFile(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (e) {
       setUploadError(e instanceof Error ? e.message : "Failed to upload document");
@@ -167,10 +179,28 @@ export default function AdminDocumentsPage() {
             </div>
             <div className="space-y-1">
               <Label>File</Label>
-              <input ref={fileInputRef} type="file" className="block text-sm" />
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] ?? null;
+                  setSelectedFile(file);
+                  setUploadError(null);
+                  if (file) setTitle(filenameToTitle(file.name));
+                }}
+              />
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
+                  Choose File
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  {selectedFile ? selectedFile.name : "No file chosen"}
+                </span>
+              </div>
             </div>
             {uploadError && <p className="text-sm text-destructive">{uploadError}</p>}
-            <Button onClick={handleUpload} disabled={uploading || !title.trim()}>
+            <Button onClick={handleUpload} disabled={uploading || !title.trim() || !selectedFile}>
               {uploading ? "Uploading…" : "Upload"}
             </Button>
           </CardContent>

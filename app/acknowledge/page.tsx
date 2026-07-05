@@ -60,7 +60,7 @@ export default function AcknowledgePage() {
                 </a>
               )}
               <Button
-                className="w-full"
+                className="w-full mt-4"
                 onClick={() => handleAcknowledge(document._id)}
                 disabled={acknowledgingId === document._id}
               >
