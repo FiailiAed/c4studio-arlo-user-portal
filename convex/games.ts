@@ -6,6 +6,7 @@ import {
   requireRefereeMutation,
   requireRefereeQuery,
 } from "./lib/auth";
+import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 
 // Games occupy a fixed 2-hour slot on a field; no separate duration field yet.
@@ -190,6 +191,10 @@ export const submitScore = mutation({
       awayScore: args.awayScore,
       scoreVerified: false,
       status: "COMPLETED_WITH_SCORE",
+    });
+
+    await ctx.scheduler.runAfter(0, internal.financialsActions.triggerStripePayout, {
+      gameId: args.gameId,
     });
   },
 });

@@ -107,4 +107,21 @@ export default defineSchema({
     teamId: v.id("teams"),
     playerId: v.id("players"),
   }).index("by_team", ["teamId"]).index("by_player", ["playerId"]),
+
+  leagueSettings: defineTable({
+    refereePayRateCents: v.number(),
+  }),
+
+  payoutLedger: defineTable({
+    gameId: v.id("games"),
+    refereeClerkId: v.string(),
+    grossAmountCents: v.number(),
+    platformFeeCents: v.number(), // 1.5% of gross, kept by the platform (not transferred)
+    netAmountCents: v.number(), // gross - fee, the amount actually transferred
+    stripeTransferId: v.optional(v.string()),
+    status: v.union(v.literal("PENDING"), v.literal("PAID"), v.literal("FAILED")),
+    failureReason: v.optional(v.string()),
+  })
+    .index("by_game", ["gameId"])
+    .index("by_referee", ["refereeClerkId"]),
 });
