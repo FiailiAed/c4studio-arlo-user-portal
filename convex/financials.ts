@@ -112,6 +112,33 @@ export const listPayoutLedger = query({
   },
 });
 
+export const getMyPayoutHistory = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await requireRefereeQuery(ctx);
+    if (!identity) return null;
+
+    const entries = await ctx.db
+      .query("payoutLedger")
+      .withIndex("by_referee", (q) => q.eq("refereeClerkId", identity.subject))
+      .collect();
+
+    const results = [];
+    for (const entry of entries) {
+      const game = await ctx.db.get(entry.gameId);
+      const [homeTeam, awayTeam] = game
+        ? await Promise.all([ctx.db.get(game.homeTeamId), ctx.db.get(game.awayTeamId)])
+        : [null, null];
+      results.push({
+        ...entry,
+        gameMatchup: game ? `${homeTeam?.name ?? "Unknown"} vs ${awayTeam?.name ?? "Unknown"}` : "Unknown game",
+        gameStartTime: game?.startTime,
+      });
+    }
+    return results;
+  },
+});
+
 export const retryPayout = mutation({
   args: { payoutLedgerId: v.id("payoutLedger") },
   handler: async (ctx, args) => {

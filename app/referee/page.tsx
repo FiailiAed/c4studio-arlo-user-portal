@@ -23,7 +23,9 @@ function PayoutAccountCard() {
   const account = useQuery(api.financials.getMyPayoutAccount);
   const startOnboarding = useAction(api.financialsActions.startOnboarding);
   const refreshMyPayoutStatus = useAction(api.financialsActions.refreshMyPayoutStatus);
+  const createExpressDashboardLink = useAction(api.financialsActions.createExpressDashboardLink);
   const [connecting, setConnecting] = useState(false);
+  const [openingDashboard, setOpeningDashboard] = useState(false);
 
   useEffect(() => {
     if (account?.stripeConnectId) {
@@ -45,6 +47,16 @@ function PayoutAccountCard() {
     }
   }
 
+  async function handleOpenDashboard() {
+    setOpeningDashboard(true);
+    try {
+      const { url } = await createExpressDashboardLink();
+      window.open(url, "_blank", "noopener,noreferrer");
+    } finally {
+      setOpeningDashboard(false);
+    }
+  }
+
   const status = !account?.stripeConnectId
     ? "not_connected"
     : account.transfersActive
@@ -59,13 +71,61 @@ function PayoutAccountCard() {
         {status === "incomplete" && <Badge variant="outline">Onboarding incomplete</Badge>}
         {status === "not_connected" && <Badge variant="destructive">Not connected</Badge>}
       </CardHeader>
-      {status !== "active" && (
-        <CardContent>
+      <CardContent className="space-y-2">
+        {status !== "active" && (
           <Button className="w-full" onClick={handleConnect} disabled={connecting}>
             {connecting ? "Redirecting…" : status === "incomplete" ? "Continue Onboarding" : "Connect Stripe Account"}
           </Button>
-        </CardContent>
-      )}
+        )}
+        {account?.stripeConnectId && (
+          <Button
+            className="w-full"
+            variant="outline"
+            onClick={handleOpenDashboard}
+            disabled={openingDashboard}
+          >
+            {openingDashboard ? "Opening…" : "View Payout Dashboard"}
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+type PayoutHistoryRow = Doc<"payoutLedger"> & { gameMatchup: string; gameStartTime?: number };
+
+function PayoutHistoryCard() {
+  const history = useQuery(api.financials.getMyPayoutHistory);
+
+  if (!history || history.length === 0) return null;
+
+  const sorted = (history as PayoutHistoryRow[])
+    .slice()
+    .sort((a, b) => (b.gameStartTime ?? 0) - (a.gameStartTime ?? 0));
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Payout History</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {sorted.map((entry) => (
+          <div key={entry._id} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+            <div>
+              <div>{entry.gameMatchup}</div>
+              {entry.gameStartTime && (
+                <div className="text-xs text-muted-foreground">{new Date(entry.gameStartTime).toLocaleDateString()}</div>
+              )}
+            </div>
+            <div className="text-right">
+              <div>${(entry.netAmountCents / 100).toFixed(2)}</div>
+              {entry.status === "PAID" && <Badge variant="default">Paid</Badge>}
+              {entry.status === "PENDING" && <Badge variant="outline">Pending</Badge>}
+              {entry.status === "FAILED" && <Badge variant="destructive">Failed</Badge>}
+            </div>
+          </div>
+        ))}
+      </CardContent>
     </Card>
   );
 }
@@ -134,6 +194,7 @@ export default function RefereeDashboardPage() {
         <h1 className="text-2xl font-semibold">My Games</h1>
 
         <PayoutAccountCard />
+        <PayoutHistoryCard />
 
         {upcoming.length === 0 && (
           <Card>

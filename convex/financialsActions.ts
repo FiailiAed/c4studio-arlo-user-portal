@@ -140,3 +140,17 @@ export const refreshRefereePayoutStatus = action({
     return { transfersActive };
   },
 });
+
+export const createExpressDashboardLink = action({
+  args: {},
+  handler: async (ctx): Promise<{ url: string }> => {
+    const context = await ctx.runQuery(internal.financials.getMyRefereeContext, {});
+    if (!context) throw new Error("Not authenticated");
+    if (!context.stripeConnectId) throw new Error("No Stripe account connected yet");
+
+    const stripe = getStripeClient();
+    const loginLink = await stripe.accounts.createLoginLink(context.stripeConnectId);
+
+    return { url: loginLink.url };
+  },
+});
