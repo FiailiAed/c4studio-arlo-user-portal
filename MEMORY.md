@@ -1,284 +1,165 @@
 # Memory file for Current Agent working on this project
 
+Every fact below was verified by reading the actual current files at the time this was written (branch `development`, after commit `1d76366`), not recalled from conversation summary. If something here conflicts with what you observe in the repo, trust the repo — this file can drift out of date, especially the schema/file listings.
+
 ---
 
 ## What This Project Is
 
-**A.R.L.O.** — Automated Referee & League Operations. A sports league management platform built for a lacrosse organization. This repo is the **user portal** (Project 1: Family & Player Registration). Future projects will add referee scheduling, program administration, etc.
+**A.R.L.O.** (Automated Referee & League Operations) — a youth-sports league management platform. This repo is the **user portal**. All 7 projects defined in `AGENTS.md`'s spec have now been built (see "Project Status" below), plus several features not in the original spec (multi-role users, hotkey navigation).
 
-The developer codes primarily with LLM agents. Treat all existing code as potentially bloated — delete freely, keep things minimal and typed.
+**Important context on scope**: this codebase is being built for a real client, **SJYLAX (South Jersey Youth Lacrosse League)** — see the `SJYLAX Client Custom Build` section in `AGENTS.md` for their actual organizational structure (Organization → League → Townships → Programs → Divisions → Counties → Teams → Games) and real documents (Bylaws, Rules of Play, age-requirement spreadsheets). **The developer's explicit direction**: build this as generically reusable software (not hardcoded to SJYLAX's specific vocabulary like "Township"/"County"), so the same codebase can be deployed for SJYLAX now and other leagues later, while deferring true multi-tenant SaaS infrastructure until it's actually needed. Read the "Gap Inventory & Roadmap" section below before starting new feature work — there is a specific, developer-approved order for what comes next.
 
----
-
-## Non-Negotiable Developer Rules
-
-Read `AGENTS.md` every session. The two rules that will get you in trouble if you forget:
-
-1. **TypeScript only. Always strict. Zero `any`.** The developer will call this out hard. Every type must be defined. If you see a `.js` file or an untyped `any`, flag it and fix it.
-2. **Delete unused code without asking.** Packages, files, functions, dead imports — if it's not used, remove it.
-
-Package manager is **Bun**, not npm or yarn. Use `bun add`, `bunx`, `bun run`.
+The developer codes primarily with LLM agents and explicitly wants aggressive deletion of unused code — see `AGENTS.md`'s "Developer Preferences" section (checked into the repo, always read it).
 
 ---
 
-## Tech Stack (exact versions — verify in package.json before assuming)
+## How This Developer Works — Read Before Doing Anything
 
-| Layer | Package | Version | Notes |
-|---|---|---|---|
-| Framework | `next` | 16.2.9 | Turbopack; breaking changes from prior versions |
-| Auth | `@clerk/nextjs` | 7.5.11 | Core 3 API |
-| Backend/DB | `convex` | 1.42.1 | Real-time serverless |
-| UI components | `shadcn/ui` | — | `@base-ui/react` variant, not Radix |
-| Styling | Tailwind CSS | v4 | `@import "tailwindcss"` syntax |
-| Hosting | Vercel | — | Main branch deploys automatically |
-| Runtime | Bun | — | Always use bun/bunx |
+1. **This developer reviews plans carefully and enjoys the planning back-and-forth.** For any non-trivial feature, use plan mode: explore, then use `AskUserQuestion` with a clearly-labeled "(Recommended)" option plus real trade-offs for genuine architectural forks — don't just proceed on assumptions. This developer routinely picks the non-default option when they have specific product reasons (e.g. chose "add a new coach role" over reusing `program_admin`; chose "full club hierarchy" over the flatter option; chose to keep payout timing as-is over gating it on dispute resolution). Presenting real trade-offs matters more than presenting *the* right answer.
+2. **This developer works on their own files concurrently, in parallel with agent sessions, and does not always mention it.** Multiple times in this project's history, `git status` showed unrelated modified/untracked files (a `DropdownPortalSelect` component, an `AGENTS.md` design-system addendum, a `family/edit` page WIP) that were the developer's own uncommitted work-in-progress, not agent output. **Always run `git status --short` before committing and stage only the files relevant to the current task** — do not sweep up unrelated changes into your commit, and do not "clean up" or rewrite the developer's own in-progress files without being asked. The one exception: if the developer's own file has a blocking error (e.g. a strict-mode TypeScript error failing `bun run build`) that prevents verifying *your* work, ask whether to apply a minimal, narrowly-scoped fix (e.g. add a type annotation) — don't restructure their file.
+3. **Do not start a background `bun run dev` for smoke-testing.** This developer runs their own dev server locally while working alongside the agent. A background dev server (or repeatedly killing/restarting one via `pkill -f "next dev"`) can collide with their running instance and corrupt their live browser session (observed once: manifested as `Uncaught SyntaxError: Unexpected end of script` in the browser from a truncated JS chunk). Verify with `bunx tsc --noEmit`, `bun run build`, and `bun run lint` only; ask the developer to manually verify routes/flows in their own running server.
+4. **Live-data mutations always need explicit confirmation at execution time**, separate from approving the overall plan — this came up twice: running a one-time Convex backfill mutation against real user data, and (initially proposed, later found unnecessary) a Clerk `publicMetadata` migration script. An auto-mode permission classifier will also block broad reads of user PII (e.g. an unscoped `users.listAll`-style dump) — expect this, and use narrower/scoped queries or ask first.
+5. **The developer sometimes fixes things themselves mid-session** (e.g. manually edited Clerk `publicMetadata` for a stuck account directly in the Clerk dashboard rather than waiting for a script). Before assuming a migration/backfill is still needed, verify actual current state (e.g. via the `clerk-cli` skill / `clerk users list`) rather than trusting that code-driven paths were the only way data changed.
+6. **Ask clarifying questions before big/ambiguous asks, but don't over-ask on bounded, well-specified follow-ups.** When the developer says "yes implement both" or gives a specific bug report, proceed directly — reserve `AskUserQuestion` for genuine forks (multiple valid designs, meaningfully different scope/cost, or anything touching real external services/money).
 
 ---
 
-## Next.js 16 Breaking Changes (critical — differs from training data)
+## Tech Stack (verified from `package.json`, current as of this writing)
 
-Before writing any Next.js code, read the relevant guide in `node_modules/next/dist/docs/`.
-
-- **`proxy.ts` not `middleware.ts`** — Clerk middleware lives at `proxy.ts` in the root.
-- **`params` and `searchParams` are Promises** — must `await` them in page/layout components.
-- **`SignedIn`/`SignedOut` not exported** from `@clerk/nextjs` — use the `Show` component: `<Show when="signed-in">`, `<Show when="signed-out">`.
-- **shadcn `Button` has no `asChild` prop** (uses `@base-ui/react`) — use `buttonVariants` with `Link` instead: `<Link className={cn(buttonVariants({ variant: "outline" }))}>`.
-
----
-
-## Clerk Setup (critical details)
-
-**Two separate tokens** — do not confuse them:
-
-| Token | Where configured | What reads it |
+| Layer | Package | Version |
 |---|---|---|
-| Session token | Clerk Dashboard → Configure → **Sessions** → Customize session token | `auth()` in proxy.ts and server code (`sessionClaims`) |
-| Convex JWT template | Clerk Dashboard → **JWT Templates** → "convex" | `ConvexProviderWithClerk` → Convex `getUserIdentity()` |
+| Framework | `next` | 16.2.9 (Turbopack; breaking changes from older Next — read `node_modules/next/dist/docs/` before assuming API shape) |
+| Auth | `@clerk/nextjs` | ^7.5.11 |
+| Backend/DB | `convex` | ^1.42.1 |
+| Payments | `stripe` | ^22.3.0 (added for Project 5) |
+| UI | `@base-ui/react` + `shadcn` | — (NOT Radix — component internals differ from shadcn's Radix-based docs/training data) |
+| Styling | `tailwindcss` | ^4 |
+| Icons | `lucide-react` | ^1.22.0 |
+| Webhooks | `svix` | ^1.96.1 (Clerk webhook signature verification) |
+| Runtime | Bun | always use `bun`/`bunx`, never `npm`/`npx` |
 
-Both tokens must include `"metadata": "{{user.public_metadata}}"` for role checks to work. The developer had to add this to **both** locations — adding it to only one is a common mistake.
-
-**Roles** are stored in Clerk `publicMetadata.role`. Valid values defined in `lib/roles.ts`:
-```
-"family" | "referee" | "program_admin" | "league_admin" | "super_admin"
-```
-`super_admin` is a strict superset of `league_admin` — every `role !== "league_admin"` check in the codebase must also allow `super_admin`, in ALL layers, not just route guards. This spans: `proxy.ts` (`/admin(.*)` gate), `app/dashboard/page.tsx` and `app/admin/page.tsx` (UI), the API routes `app/api/users/{role,delete,invite}/route.ts` (both the `callerRole` check AND `VALID_ROLES` validation arrays), and the Convex-side checks in `convex/users.ts`'s `listAll` and `convex/customTables.ts`'s `requireLeagueAdminQuery`/`requireLeagueAdminMutation` helpers. When `super_admin` was first added, only page-level gating was updated — `listAll` still threw `"Forbidden"` for a `super_admin` viewing `/admin`, since the Convex-side check was missed. `grep -rn '"league_admin"'` across the repo before considering a role-tier change done.
-
-**Role update flow (existing user)**: `POST /api/users/role` (server route) → `clerkClient().users.updateUser()` → Clerk fires `user.updated` webhook → Convex HTTP action → `syncFromWebhook` internalMutation patches `users.role`.
-
-**Role pre-assignment flow (new user via invite)**: `POST /api/users/invite` (server route) → `clerkClient().invitations.createInvitation({ emailAddress, publicMetadata: { role } })` → Clerk emails the invite → on acceptance/signup, Clerk automatically copies the invitation's `publicMetadata` onto the new `User.publicMetadata` → Clerk fires `user.created` (same webhook as above) → `syncFromWebhook` picks up `role` with zero extra Convex code. No admin follow-up needed after the invite is sent.
-
-**Deletion flow**: `POST /api/users/delete` (server route, blocks self-deletion) → `clerkClient().users.deleteUser()` → Clerk fires `user.deleted` on the **same** webhook endpoint (`/clerk-webhook` — one endpoint subscribed to multiple event types, not a second webhook) → `deleteByClerkId` internalMutation removes the matching Convex `users` row.
-
-Webhook is registered and live (`/clerk-webhook` on Convex), subscribed to `user.created`, `user.updated`, and `user.deleted`. Required `CLERK_WEBHOOK_SECRET` to be set both in `.env.local` **and** in the Convex dashboard's environment variables — missing it on the Convex side was why the webhook initially failed.
-
-**Impersonation flow (`super_admin` only, single-session — no Clerk multi-session feature required)**:
-
-- **Enter**: `POST /api/admin/impersonate` (`{ targetClerkId }`) → `clerkClient().actorTokens.create({ userId: targetClerkId, actor: { sub: callerId } })` (Clerk's native impersonation primitive — NOT a custom session swap) → route also writes an `impersonationEvents` row via `ConvexHttpClient` (forwarding the caller's Convex JWT so `convex/impersonation.ts`'s `logStart` mutation can independently re-verify `super_admin`) → route builds its own redemption URL, `new URL("/sign-in", request.url)` with `?__clerk_ticket=<actorToken.token>` appended, and returns `{ url }`. **Do not use `actorToken.url` directly** — `ActorTokenCreateParams` has no `redirectUrl` param (unlike the invitation API above), so `.url` defaults to Clerk's hosted Account Portal (`*.accounts.dev`), landing on the Account Portal's own `/default-redirect` instead of this app. Client-side, `app/admin/users/page.tsx`'s `confirmImpersonate` calls `await clerk.signOut()` **before** navigating to that URL — without this, Clerk silently ignores `__clerk_ticket` whenever a session is already active (this is the multi-session-vs-single-session distinction: redeeming a ticket while signed in requires Clerk's paid multi-session feature; signing out first works on any plan).
-- **Detect**: the resulting session's JWT carries an `actor: { sub: adminClerkId }` claim, readable via `auth().actor` (server) or `useAuth().actor` (client). `components/impersonation-banner.tsx` renders whenever `actor` is present.
-- **Exit**: `POST /api/admin/exit-impersonation` (no body) reads `auth().actor.sub` — the admin's real Clerk ID, cryptographically embedded in the current (impersonated) session's JWT, not client-supplied, so this route needs no separate role check — and calls `clerkClient().signInTokens.createSignInToken({ userId: actor.sub, expiresInSeconds: 60 })` (a normal, non-impersonation sign-in ticket — NOT another actor token, since we want the admin back in their own account with no `actor` claim this time). Same redemption-URL-building pattern as above. Client (`components/impersonation-banner.tsx`) signs out of the impersonated session first, then navigates to the returned URL.
+**Next.js 16 breaking changes that matter here** (already discovered, don't rediscover):
+- `proxy.ts` at repo root, not `middleware.ts`.
+- `params`/`searchParams` are Promises — `await` them (or `use()` them client-side, e.g. `app/admin/data/[tableId]/page.tsx`, `app/admin/clubs/[clubId]/roster/page.tsx`).
+- `SignedIn`/`SignedOut` aren't exported from `@clerk/nextjs` — use `<Show when="signed-in">` / `<Show when="signed-out">`.
+- shadcn `Button` has no `asChild` (uses `@base-ui/react`, not Radix) — use `buttonVariants({...})` + `<Link>` directly.
 
 ---
 
-## Convex Setup
+## Identity & Roles
 
-`convex/auth.config.ts` links to the Clerk JWT template named `"convex"`:
-```ts
-{ domain: "https://famous-pigeon-50.clerk.accounts.dev", applicationID: "convex" }
-```
+**Multi-role**: users can hold multiple roles simultaneously. `AppRole` (`lib/roles.ts`) = `"family" | "referee" | "program_admin" | "coach" | "league_admin" | "super_admin"`. Stored as `users.roles: string[]` in Convex (there is **no** singular `role` field anymore — it was migrated away from and fully removed from the schema). Mirrored in Clerk as `publicMetadata.roles: string[]` (also plural — note the `s`, this was a deliberate rename from the original singular `role`).
 
-`ConvexProviderWithClerk` in `app/ConvexClientProvider.tsx` uses `useAuth` from `@clerk/nextjs` — calls `getToken({ template: "convex" })` internally.
+`super_admin` is a strict superset of `league_admin` everywhere — every `league_admin`-only check must also allow `super_admin`. `program_admin` exists as a role/`ROLE_CONFIG` entry and a `DASHBOARD_PLACEHOLDERS` "Coming Soon" card, but **has no dedicated route or Convex functions of its own** — it was speculative scaffolding from Project 1 that nothing ever built on; `coach` was added as a distinct new role instead when Project 4 was built (see Gap Inventory).
 
-**Custom JWT claims in `getUserIdentity()`**: `UserIdentity` has `[key: string]: JSONValue | undefined`. Access custom claims via `identity["metadata"] as { role?: string }` — do NOT use the double-cast `(identity as Record<string, unknown>).metadata` pattern, it's fragile.
+**Shared role-check helper**: `hasAnyRole(roles: string[] | undefined, allowed: string[]): boolean` lives in **two places** (small deliberate duplication, not an oversight): `lib/roles.ts` (for `proxy.ts` and API routes — ordinary Next.js server code) and a private copy inside `convex/lib/auth.ts` (Convex's bundler only bundles within `convex/`, so it can't import from root `lib/`).
 
-**Critical Convex query pattern**: Return `null` (not `throw`) when `getUserIdentity()` returns null. Throwing leaves `useQuery` permanently errored. Returning null lets Convex re-run the query when the auth token arrives.
+**`convex/lib/auth.ts`** exports 6 gate helpers, one query/mutation pair per privileged role: `requireLeagueAdminQuery/Mutation`, `requireRefereeQuery/Mutation`, `requireCoachQuery/Mutation`. All follow the identical pattern: read `identity["metadata"].roles` (JWT-embedded, fast path) first; if that doesn't match, fall back to a `users` table lookup by `by_clerk_id` and check `.roles` there. **Query variants return `null` on missing identity** (never throw — throwing leaves `useQuery` stuck in a permanent error state during the auth-token-arrival race on page load); **mutation variants throw** `"Not authenticated"` immediately (mutations aren't subject to that race). Both throw `"Forbidden"` on a present-but-wrong role. None of these helpers grant `league_admin`/`super_admin` an automatic bypass into referee/coach-gated Convex functions — that asymmetry is intentional-by-precedent (referee was built first this way, coach copied it for consistency) but is NOT mirrored in `proxy.ts`'s route matchers, which *do* let `league_admin`/`super_admin` through `/referee(.*)` and `/coach(.*)` — a known inconsistency, not a bug, if you notice it.
 
-```ts
-const identity = await ctx.auth.getUserIdentity();
-if (!identity) return null; // NOT throw new Error("Unauthorized")
-```
+**Per-record ownership** (e.g. "is this game assigned to this referee", "is this game one of this coach's teams") is always checked **inline by the caller**, not folded into the shared role helpers — e.g. `convex/games.ts`'s `acceptGame`/`submitScore` do `if (game.refereeId !== identity.subject) throw new Error("Forbidden")` after calling `requireRefereeMutation`.
+
+**Clerk JWT setup** (both the session token AND the separate `"convex"` JWT template need `"metadata": "{{user.public_metadata}}"` configured in the Clerk Dashboard — configuring only one is the single most common way role checks silently break. This is a **Clerk Dashboard config**, not code — nothing in this repo can fix it if it's missing.)
+
+**Route guards** (`proxy.ts`): `/admin(.*)` → `league_admin`/`super_admin`; `/referee(.*)` → `referee`+admins; `/coach(.*)` → `coach`+admins. No guard exists for `/players` (any authenticated user can hit the route; the data itself is scoped by `guardianClerkId` inside the query).
 
 ---
 
-## Project Architecture
+## Convex Backend — File Map (verified via `ls convex/*.ts`)
 
-```
-/
-├── proxy.ts                    # Clerk middleware (Next.js 16 = proxy.ts not middleware.ts)
-├── app/
-│   ├── layout.tsx              # ClerkProvider > ConvexClientProvider > header > ImpersonationBanner
-│   ├── ConvexClientProvider.tsx
-│   ├── page.tsx                # / redirects to /dashboard
-│   ├── dashboard/
-│   │   └── page.tsx            # Post-login landing page for all roles — calls upsertUser on every login;
-│   │                           # dynamic, role-specific content only (league_admin/super_admin get an
-│   │                           # "Open Admin Dashboard" link card; family gets "My Players"; other roles
-│   │                           # get a "coming soon" placeholder). No profile info/admin stats here.
-│   ├── user/
-│   │   ├── page.tsx            # Read-only Profile Details + Permissions ("My Profile" link in header)
-│   │   └── edit/page.tsx       # Edit phone/DOB/address (Clerk owns name/email)
-│   ├── admin/
-│   │   ├── layout.tsx          # Left sidebar nav (Dashboard | Users | Invite | Data), mobile hamburger overlay
-│   │   ├── page.tsx            # /admin — League Overview widget + "Manage Users"/"Invite Users" quick links
-│   │   ├── users/page.tsx      # /admin/users — Role management, Delete, Impersonate (super_admin only), DataTable
-│   │   ├── invite/page.tsx     # /admin/invite — Send a Clerk email invite with a pre-assigned role
-│   │   └── data/                # /admin/data — league_admin-defined custom data tables (sandbox, not type-safe)
-│   │       ├── page.tsx        # List of tables + "New Table" builder dialog
-│   │       └── [tableId]/page.tsx # Column editor + record CRUD grid for one custom table
-│   ├── players/
-│   │   ├── page.tsx            # /players — family's player list (cards), Add/Edit/Delete
-│   │   ├── new/page.tsx        # /players/new — create-player form
-│   │   └── [playerId]/edit/page.tsx  # /players/[playerId]/edit — edit-player form
-│   └── api/
-│       ├── users/role/route.ts       # Server route: update Clerk publicMetadata.role
-│       ├── users/invite/route.ts     # Server route: create a Clerk invitation with publicMetadata.role preset
-│       ├── users/delete/route.ts     # Server route: delete a Clerk user (blocks self-deletion)
-│       ├── admin/impersonate/route.ts       # Server route: super_admin-only, creates a Clerk actor token
-│       └── admin/exit-impersonation/route.ts # Server route: creates a normal sign-in ticket back to auth().actor.sub
-├── components/
-│   ├── impersonation-banner.tsx # "Viewing as X" banner + exit flow, shown whenever useAuth().actor is set
-│   ├── address-autocomplete.tsx # Google Places autocomplete for the Street field on /user/edit
-│   ├── ui/data-table.tsx       # Generic responsive table: desktop <table> + mobile card-per-row view
-│   └── players/
-│       └── player-form.tsx     # Shared create/edit player form (mode: "create" | "edit")
-├── convex/
-│   ├── schema.ts               # users, players, tableDefinitions, customRecords, impersonationEvents
-│   ├── users.ts                # getCurrentUser, upsertUser, updateProfile, listAll, syncFromWebhook, deleteByClerkId
-│   ├── players.ts              # listMyPlayers, createPlayer, updatePlayer, deletePlayer (guardian-scoped)
-│   ├── customTables.ts         # league_admin-only CRUD for admin-defined tables/columns/records (v.any() confined here)
-│   ├── impersonation.ts        # logStart — super_admin-only audit-write mutation, called via ConvexHttpClient
-│   ├── http.ts                 # Clerk webhook handler at /clerk-webhook
-│   └── auth.config.ts          # Links to Clerk JWT template "convex"
-└── lib/
-    └── roles.ts                # AppRole type, getRoleConfig(), DASHBOARD_PLACEHOLDERS
-```
+| File | Purpose |
+|---|---|
+| `schema.ts` | Single source of truth, all 15 tables |
+| `lib/auth.ts` | The 6 role-gate helpers described above |
+| `users.ts` | `getCurrentUser`, `upsertUser`, `updateProfile`, `listAll` (admin), `syncFromWebhook`/`deleteByClerkId` (internal, driven by Clerk webhook) |
+| `http.ts` | Clerk webhook handler (`user.created/updated/deleted`) at `/clerk-webhook` |
+| `players.ts` | Guardian-scoped player CRUD (`listMyPlayers`) + `listAllPlayers` (admin, added for Project 4's roster builder) |
+| `customTables.ts` | League-admin-only ad hoc data tables (`/admin/data`) — the one place `v.any()` is used, deliberately |
+| `impersonation.ts` | `logStart` audit-log mutation for `super_admin` impersonation |
+| `fields.ts`, `teams.ts` | Project 2 — scheduling primitives. `teams` also carries `clubId` (added in Project 4) |
+| `games.ts` | Core game lifecycle: `createGame`/`updateGameSlot`/`cancelGame` (admin), `listGames` (admin), `listMyAssignedGames`/`acceptGame`/`submitScore` (referee) — `submitScore` also schedules the Stripe payout action |
+| `referees.ts` | `getAvailableRefs` (conflict-free suggestion for a given game/slot), `assignReferee`/`unassignReferee` (admin) |
+| `clubs.ts` | Admin CRUD for clubs, coach assignment, `listCoaches` |
+| `rosters.ts` | Admin-only roster join-table CRUD (`addToRoster`/`removeFromRoster`/`listRosterForTeam`) |
+| `coach.ts` | Coach-facing reads (`getMyClub`/`getMyRoster`/`getMySchedule`) + `verifyScore`/`flagDispute` |
+| `disputes.ts` | Admin-facing `listOpenDisputes`/`resolveDispute` |
+| `financials.ts` | League pay-rate settings, referee Stripe-account linking/status cache, payout ledger queries, `retryPayout` |
+| `financialsActions.ts` | **`"use node";`** file — the only place Node-runtime code lives, since Convex requires files importing Node-only npm packages (here: `stripe`) to be isolated from query/mutation files. Contains `triggerStripePayout` (internal action), `startOnboarding`/`refreshMyPayoutStatus`/`refreshRefereePayoutStatus`/`createExpressDashboardLink` (public actions, referee/admin self-service Stripe Connect) |
+| `documents.ts` | Project 7 — Convex File Storage upload flow, `getMyRequiredDocuments`/`acknowledgeDocument` |
+
+**Convex operational notes** (all independently verified, not just recalled):
+- `bunx convex dev --once` is what actually **pushes** schema/function changes to the dev deployment. `bunx convex codegen` alone only regenerates local `convex/_generated/*` TypeScript types — it does **not** push. If a newly-added function 404s when called via `bunx convex run` or from the client, you probably only ran `codegen`.
+- **Schema field removal requires a 3-step migration**, not a direct delete: (1) add the new field as `v.optional(...)` alongside the old one, push; (2) write and run a one-time internal mutation that backfills the new field from the old one on every existing doc; (3) remove the old field from the schema entirely, push again. Directly deleting a field that existing documents still physically carry fails schema validation with `"Object contains extra field ... that is not in the validator"` — this happened during the `role` → `roles` migration and needed an extra intermediate push to fix.
+- Environment variables needed by Convex **functions** (not just Next.js) must be set in **Convex's own environment**, separately from `.env.local` — via `bunx convex env set KEY value` or the Convex dashboard. This has bitten this project twice: `CLERK_WEBHOOK_SECRET` (Project 1) and `STRIPE_SECRET_KEY` (Project 5) both needed to be added to Convex's env, not just `.env.local`, before the corresponding Convex functions (webhook handler, `financialsActions.ts`) worked.
+- Actions can't touch `ctx.db` directly — they call `ctx.runQuery`/`ctx.runMutation` against `internalQuery`/`internalMutation` functions defined in a regular (non-`"use node"`) file.
 
 ---
 
-## Data Ownership
+## Stripe Connect (Project 5 + later additions) — Real Gotchas
 
-| Field | Owner | Notes |
-|---|---|---|
-| firstName, lastName | Clerk | Read via `useUser()` / `currentUser()` |
-| email | Clerk | Read via `useUser()` / `currentUser()` |
-| password | Clerk | Never touch |
-| role | Clerk `publicMetadata.role` | Cached/denormalized in Convex `users.role` — **`users.role` is the canonical read source in the app** (e.g. `/dashboard`, `/user`); Clerk's client-side `publicMetadata.role` can lag a fresh admin role change until the session JWT refreshes |
-| phone, dateOfBirth, address | Convex | League-specific data, viewed on `/user`, edited via `/user/edit` |
-| players (firstName, lastName, dateOfBirth, gender, school, grade) | Convex | Owned by the `family` guardian who created them (`guardianClerkId`); managed on `/players` |
-
-Convex caches `firstName`, `lastName`, `email`, `role` from Clerk for admin queries. These are synced:
-- On every `/dashboard` page load (`upsertUser` mutation patches the record)
-- Via Clerk webhook on `user.created` / `user.updated` (when registered)
+- **Business model on the Stripe dashboard: "Marketplace" (not "Platform")** — this platform is the one handling money in and sending payouts to referees (recipients), not a platform where each connected account processes its own customer charges.
+- **A freshly created Stripe Connect account does NOT have the `transfers` capability active just because it exists.** It must complete (test-mode) onboarding first. Calling `stripe.transfers.create` against an account that hasn't finished onboarding fails with an error naming the missing `transfers`/`crypto_transfers`/`legacy_payments` capability. This is normal Stripe behavior, not a bug in this codebase — if a payout fails with that message, the fix is (re)completing onboarding for that connected account, and `/admin/financials` has a "Refresh Status" button plus `/referee`'s "Continue Onboarding" button for exactly this.
+- **Payout timing is deliberate and developer-confirmed**: `submitScore` (referee submits a score) triggers the Stripe transfer **immediately**, before any coach verification/dispute step. This is intentional — referees are explicitly incentivized to submit scores right away because payment fires on submission. Project 6 (disputes) does **not** gate or claw back payment; `resolveDispute` only ever corrects the score record, never touches `payoutLedger` or calls Stripe. Do not "fix" this without asking — it was a deliberate developer decision made after explicit discussion, not an oversight.
+- The 1.5% platform fee is captured by simply **not transferring that portion** — `stripe.transfers.create` only moves `netAmountCents` (gross minus fee) to the connected account; the fee amount stays in the platform's own Stripe balance automatically. No `application_fee_amount` is used (that parameter is for destination-charge flows, which don't apply here since there's no customer-facing charge, just a balance-to-recipient transfer).
+- Referee's own Stripe **Express Dashboard** access (balance, payout history, bank info — all managed by Stripe, not built by this app) is via `stripe.accounts.createLoginLink(accountId)` — a fresh single-use link generated per visit, no persistent Stripe credentials for referees.
+- Admin can still manually paste/override a referee's Stripe Connect account ID on `/admin/financials` as a support escape hatch, alongside the self-onboarding flow — both coexist deliberately.
 
 ---
 
-## Convex Schema (`convex/schema.ts`)
+## Frontend Conventions
 
-```ts
-users: defineTable({
-  clerkId: v.string(),
-  firstName: v.optional(v.string()),
-  lastName: v.optional(v.string()),
-  email: v.optional(v.string()),
-  role: v.optional(v.string()),
-  phone: v.optional(v.string()),
-  dateOfBirth: v.optional(v.string()),
-  address: v.optional(v.object({
-    street: v.string(), city: v.string(), state: v.string(), zip: v.string(),
-  })),
-}).index("by_clerk_id", ["clerkId"])
-
-players: defineTable({
-  guardianClerkId: v.string(),
-  firstName: v.string(),
-  lastName: v.string(),
-  dateOfBirth: v.string(),
-  gender: v.optional(v.string()),
-  school: v.optional(v.string()),
-  grade: v.optional(v.string()),
-}).index("by_guardian", ["guardianClerkId"])
-
-tableDefinitions: defineTable({
-  name: v.string(),
-  createdBy: v.string(), // clerkId
-  columns: v.array(v.object({
-    key: v.string(), label: v.string(),
-    type: v.union(v.literal("text"), v.literal("number"), v.literal("date"), v.literal("boolean"), v.literal("select")),
-    options: v.optional(v.array(v.string())),
-  })),
-}).index("by_name", ["name"])
-
-customRecords: defineTable({
-  tableId: v.id("tableDefinitions"),
-  data: v.record(v.string(), v.any()), // columnKey -> value; the ONE deliberate v.any() exception in this app
-}).index("by_table", ["tableId"])
-
-impersonationEvents: defineTable({
-  adminClerkId: v.string(),
-  targetClerkId: v.string(),
-  startedAt: v.number(),
-}).index("by_admin", ["adminClerkId"]).index("by_target", ["targetClerkId"])
-```
-
-`players.guardianClerkId` mirrors the `users.clerkId` / `by_clerk_id` convention (a raw Clerk subject string, not a `users._id` reference) so a player profile survives even if the guardian's own `users` doc doesn't exist yet. No `programId`/`teamId`/`season` fields — Programs, Teams, and Game Scheduling are separate future projects that don't exist in this codebase yet.
-
-**`v.any()` exception**: `customRecords.data` and its corresponding mutation args in `convex/customTables.ts` are the only place `v.any()` is used in this codebase. This is intentional — `/admin/data` lets `league_admin` define arbitrary table shapes at runtime, which Convex's compile-time schema can't express. Do not let this pattern spread elsewhere; every other table/query/mutation stays strictly typed.
+- **`components/ui/data-table.tsx`**: generic `DataTable<T>` — desktop `<table>` (`hidden md:block`) + mobile card-per-row stack (`md:hidden`), same `columns`/`rows`/`getRowKey`/`renderActions`/optional `selection` props throughout the app. Reuse this for any new tabular admin view; don't build a new table component.
+- **Admin CRUD page pattern** (established by `/admin/data`, repeated everywhere since — schedule/teams/fields, clubs, financials, exceptions, documents): `useQuery`/`useMutation` from `convex/react`, `ArloLoader` while `undefined`, inline-editable `Input` with `onBlur` commit for renames, a shared confirm-`Dialog` for deletes, everything inline in one client component file — no extracted subcomponent files for form pieces.
+- **`app/admin/layout.tsx`**: `ADMIN_NAV` is a flat array rendered in both a desktop sidebar and a mobile hamburger overlay. Adding an admin page = append one entry here.
+- **Client-side "gate" pattern** (used for `AcknowledgeGate`, and could be reused for similar future needs): a `"use client"` component with no visual output, mounted inside `<Show when="signed-in">` in `app/layout.tsx`, that `useQuery`s some Convex state and calls `router.replace(...)` when a condition is met. This is the deliberate substitute for doing the equivalent check inside `proxy.ts`'s Next.js Edge middleware, which can't cheaply call Convex per-request.
+- **Hotkey navigation** (`components/hotkey-nav.tsx`): Gmail-style `g` then a letter (`gd`→dashboard, `ga`→admin, `gr`→referee, `gc`→coach, `gp`→players, `gu`→my profile), `?` toggles a help dialog. The `DESTINATIONS` array in that file is the source of truth for the current list — check it directly rather than trusting this bullet, since it gets extended over time (e.g. `gu` was added after this file was first written). Shortcuts are filtered to what the signed-in user's roles actually grant — a shortcut for a route the user can't access is never bound in the first place, not bound-then-redirected.
+- **`components/dropdown-portal-select.tsx`**: a header portal switcher (Admin/Players/Referee/Coach/Program) — note it currently links to `/program`, which is **not a real route** (dead link) since `program_admin` has no dedicated page; flag this if you touch that component.
 
 ---
 
-## Route Guards
+## Project Status (against `AGENTS.md`'s 7-project spec)
 
-`proxy.ts` protects routes:
-- All routes require auth (except `/sign-in`, `/sign-up`)
-- `/admin/*` requires `sessionClaims.metadata.role` to be `"league_admin"` or `"super_admin"` — redirects to `/dashboard` otherwise
-- `/api/admin/impersonate` is NOT covered by the `/admin(.*)` matcher (that only matches page routes under `/admin`, not `/api/admin/*`) — it enforces `super_admin`-only access itself, in-route
+All 7 are built, but "built" means "the literal spec interaction works end-to-end," not "production-hardened for a real multi-league SaaS." See the Gap Inventory below for what's genuinely missing or shallow.
 
----
+1. **Identity & User Registration** — done via Clerk role metadata (not Clerk Organizations — see gap below).
+2. **Game Scheduling** — done: `fields`/`teams`/`games`, admin CRUD at `/admin/schedule`, double-booking prevention via `by_field_and_time` index check.
+3. **Referee Management** — done: assign/accept flow, ARLO Alert for unassigned games within 48h on `/admin`.
+4. **Program & Team Administration** — done, but as a **new `coach` role** (not `program_admin`) with a flat `clubs → teams` model (no Townships/Programs/Divisions/Counties nesting — see gap below).
+5. **Financials & Reports** — done: real Stripe Connect test-mode transfers, referee self-onboarding, admin payout ledger. The league's *own* $299/mo subscription billing to the platform was never built (see gap below) — only the outbound referee-payout side exists.
+6. **Dispute Resolution** — done: coach can dispute instead of verify, admin resolves via `/admin/exceptions`. Payout is never gated on this (see Stripe section above).
+7. **Document Storage & Compliance** — done: admin uploads via Convex File Storage, per-document configurable `requiredForRoles` (not hardcoded to coaches, a deliberate generalization), hard client-side gate via `/acknowledge`.
 
-## Pitfalls and Fixes Encountered
-
-| Problem | Root cause | Fix |
-|---|---|---|
-| `SignedIn`/`SignedOut` not exported | Clerk v7 removed them | Use `<Show when="signed-in/out">` |
-| Button `asChild` missing | shadcn uses @base-ui/react | Use `buttonVariants` + `Link` |
-| Schema validation failed after field removal | Existing docs had the old fields | 3-step: make optional → push → migrate → remove → push |
-| `upsertUser` "Not authenticated" | `useEffect` fired before Convex had the auth token | Guard with `&& clerkUser` (now: always call when `clerkUser` is available) |
-| `/admin/users` blocked despite having role | Session token didn't include `publicMetadata` by default | Add `"metadata": "{{user.public_metadata}}"` to Clerk Sessions → Customize session token |
-| `listAll` "Unauthorized" on fast loads | Convex query threw before auth token arrived → stuck error state | Return `null` instead of throwing when `!identity` |
-| Admin table empty (no names/emails) | `upsertUser` returned early on existing records without updating | Changed to always patch `firstName`/`lastName`/`email`; effect runs every login |
-| Debug route breaks production build | Top-level `throw` evaluated at build time | Never use top-level throws for env guards; gate inside the handler |
-| Clerk webhook returned 400/failed silently | `CLERK_WEBHOOK_SECRET` was only set in `.env.local`, not in Convex's own environment variables (Convex HTTP actions run in Convex's environment, not Next.js's) | Add the secret to the Convex dashboard env vars too |
-| `convex/_generated/api.d.ts` out of sync after adding a new Convex module | Isolated agent worktrees for `feat/admin-custom-data`/`feat/player-registration` had no `.env.local`/Convex deploy credentials, so `bunx convex codegen` couldn't run there | In the main working directory (with real `.env.local`/`CONVEX_DEPLOYMENT`), `bunx convex codegen` works and pushes schema changes to the real dev deployment — prefer this over hand-editing the generated file when credentials are available |
-| Invite emails linked to Clerk's hosted Account Portal (`*.accounts.dev/sign-up`) instead of our app | `createInvitation` was called without `redirectUrl`, so Clerk fell back to its default Account Portal domain | Pass `redirectUrl: new URL("/sign-up", request.url).toString()` — Clerk appends the invitation ticket, and `<SignUp />` on our `/sign-up` page handles ticket-based sign-up automatically |
-| Impersonation redirected to Clerk's hosted Account Portal (`*.accounts.dev/default-redirect`) instead of `/dashboard` | `actorTokens.create()` has no `redirectUrl` param (unlike `createInvitation`), so `actorToken.url` defaults to the Account Portal | Ignore `actorToken.url`; build a same-app URL from the raw `actorToken.token` instead: `new URL("/sign-in", request.url)` + `?__clerk_ticket=<token>` |
-| Recurring: isolated worktree agents branch off a stale ancestor instead of the actual `development` tip (has happened repeatedly — `feat/admin-custom-data`'s first attempt, one of `feat/ui-ux-fixes`'s four sub-tasks) | Each fresh worktree's initial checkout snapshot can predate recent merges; an agent that doesn't verify against `origin/development` before branching inherits the wrong base | **Before merging any worktree-agent branch**, run `git diff origin/development origin/<branch> --stat` and sanity-check the file count/deletions — a huge unexpected deletion count means the branch is based on something stale. Never trust an agent's self-report that it "reset onto the correct base"; verify the actual diff yourself. If wrong, extract just the genuinely new files/diffs and reapply them directly on the correct base rather than merging the branch |
-| `super_admin` got "Forbidden" from `listAll` on `/admin` despite the role existing | Adding a new role tier only updated page-level gates (`proxy.ts`, dashboard pages); the actual Convex-side `league_admin`-only checks in `convex/users.ts`/`convex/customTables.ts` and the API routes' `VALID_ROLES` arrays were missed | `grep -rn '"league_admin"'` across the whole repo and update every match, not just route guards |
-| Impersonation "succeeded" (redirected into the app) but the admin was still signed in as themselves, not the target | Clerk silently ignores a sign-in ticket (`__clerk_ticket`) when a session is already active — redeeming into a *different* session while one exists requires Clerk's paid multi-session feature | Call `clerk.signOut()` client-side before navigating to the ticket URL, both entering and exiting impersonation; exit uses a separate normal `signInTokens.createSignInToken()` ticket (not another actor token) for `auth().actor.sub` to get back into the admin's own account — no multi-session needed either way |
+**Beyond the original spec**: multi-role users (`users.roles: string[]`), Gmail-style hotkey navigation, a header portal-switcher dropdown.
 
 ---
 
-## Environment Variables
+## Gap Inventory & Roadmap (as of this writing — confirm still current before acting on it)
 
-Never commit `.env*` files. Required variables:
+This was compiled by re-reading `AGENTS.md`'s SJYLAX section against the actual built code, then confirmed with the developer. **Developer-approved order for what's next: this list, roughly top to bottom, after finishing the polish/testing on what already exists.** Do not start any of these without re-confirming scope with the developer first — several involve real architectural forks.
 
-**`.env.local`** (local dev):
-- `CONVEX_DEPLOYMENT`
-- `NEXT_PUBLIC_CONVEX_URL`
-- `NEXT_PUBLIC_CONVEX_SITE_URL`
-- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
-- `CLERK_SECRET_KEY`
-- `NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in`
-- `NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up`
-- `CLERK_WEBHOOK_SECRET` (add when webhook is registered)
-- `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (for address autocomplete on `/user/edit` — see `components/address-autocomplete.tsx`; requires a Google Cloud project with the Places API enabled, an API key restricted to this app's HTTP referrers, and billing enabled on the project even for free-tier usage. Optional at runtime — the address field degrades to a plain text input with no suggestions if unset, no crash.)
+### Fully missing (no plan has ever touched these)
 
-Same vars needed in Vercel environment variables (except `CONVEX_DEPLOYMENT` is replaced by Convex's Vercel integration).
+1. **Organization/League multi-tenancy** — the schema is entirely flat and global. No table has an `orgId`/`leagueId`. **Developer's explicit decision (confirmed)**: do NOT retrofit multi-tenancy now. Treat this deployment as SJYLAX's own dedicated instance. But — and this is the important nuance — **when building anything below that touches organizational structure, model it generically** (e.g. a configurable-depth `orgUnit`/hierarchy concept with admin-defined level names, not hardcoded fields called `township`/`county`), so the same schema could describe a different league's tiers later without a rewrite. This is "build for one, design for many," not "build multi-tenant now."
+2. **Location-based / residency assignment** — SJYLAX requires players to play for the township they live in, derived via: player → family primary address → sending school district → matching township program. Entirely unbuilt. `players` has no address field at all (only the guardian's `users.address` does, and that's just street/city/state/zip, no district concept). Would need a new geography/district table and matching logic, designed generically per point 1.
+3. **Season setup** — no "season" entity exists anywhere. `games.startTime` is a raw timestamp with no season grouping. No blank/template/custom-template creation flow.
+4. **Bulk scheduling operations** — `createGame` is strictly one-game-at-a-time via a dialog form. No CSV import, no recurring-game generation, no season-wide batch builder.
+5. **Age/grade division eligibility** — SJYLAX provides a real per-season age-requirements spreadsheet, but nothing validates a player's grade/DOB against a division's bracket rules. `players.grade`/`dateOfBirth` exist but are never checked against anything.
+6. **Communications system** — no messaging, no email/SMS notifications, no in-app announcements anywhere. Only Clerk's own auth/invite emails exist (sign-up confirmation, invitation emails) — nothing app-driven.
+7. **SaaS subscription billing** — the CEO section of `AGENTS.md` describes a $299/mo/league platform fee in addition to the 1.5% referee-payout fee. Only the referee-payout side of Stripe was ever built; there's no Stripe Billing/Checkout integration for the league's own subscription to the platform.
+
+### "Completed" projects with real, known gaps
+
+- **Project 1 (Identity)**: spec called for Clerk **Organizations** (`<OrganizationSwitcher />`, `org_id` passed to every query) for multi-tenant league boundaries. This repo uses Clerk role metadata (`publicMetadata.roles`) instead — works fine for a single-league deployment, but is not the multi-tenancy mechanism the original spec described. Revisit this decision specifically (not just "note it") if/when multi-tenancy work above ever starts, since Clerk Organizations vs. a custom `orgId` scheme are two different paths with different migration costs.
+- **Project 2 (Scheduling)**: no season concept (see gap #3 above) — the spec's `getGamesBySeason` was never literally buildable since there's no season to filter by; the actual function is `listGames` with an optional raw `from`/`to` timestamp range instead.
+- **Project 4 (Program Admin)**: `clubs → teams` is a flat single level (one coach per club, a club has many teams) — nothing like SJYLAX's real Townships → Programs → Divisions → Counties nesting, and no residency-based auto-assignment (a player is added to a team's roster manually by an admin, not auto-matched by address).
+- **Project 5 (Financials)**: only the outbound referee-payout half of Stripe exists (see gap #7 above — inbound league subscription billing was never built).
 
 ---
 
-## Pending Work
+## Environment Variables (confirmed against `.env.local` presence, not just recalled)
 
-All items from the original `feat/admin-role-management` list are complete: the Clerk webhook is registered and live, `CLERK_WEBHOOK_SECRET` is set in both `.env.local` and the Convex dashboard, `convex/migrations.ts` has been deleted, and `adminrolemanagement.patch` was already removed.
+Required in `.env.local` for local dev: `CONVEX_DEPLOYMENT`, `NEXT_PUBLIC_CONVEX_URL`, `NEXT_PUBLIC_CONVEX_SITE_URL`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in`, `NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up`, `CLERK_WEBHOOK_SECRET`, `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (optional — address autocomplete degrades gracefully to a plain input if unset).
 
-`user.deleted` has been enabled on the existing `/clerk-webhook` subscription and end-to-end deletion (Clerk account removed → Convex `users` row removed via `deleteByClerkId`) has been confirmed working. No outstanding manual steps.
+**`STRIPE_SECRET_KEY`**: needed in **Convex's own environment** (`bunx convex env set STRIPE_SECRET_KEY sk_test_...`), not `.env.local` — nothing in the Next.js/browser side calls Stripe directly, only the Convex action (`financialsActions.ts`) does. Adding it only to `.env.local` will look configured but silently fail every payout with `"STRIPE_SECRET_KEY is not configured"` in the `payoutLedger` failure reason.
 
-`feat/player-registration` added `family`-role player profile CRUD (`/players`, `/players/new`, `/players/[playerId]/edit`, `convex/players.ts`). Still needs manual browser testing (no real Clerk session available in the branch's dev environment): add a player, refresh to confirm persistence, edit, delete, and confirm a second family account can't see/edit the first family's players. The worktree that built it had no Convex deployment credentials, so `convex/_generated/api.d.ts` was hand-edited to declare the `players` module rather than regenerated via `convex dev` — run `bunx convex dev` once to have Convex regenerate it for real.
+**`CLERK_WEBHOOK_SECRET`**: needed in **both** `.env.local` and Convex's own environment (the webhook handler is a Convex HTTP action, running in Convex's environment, not Next.js's).
