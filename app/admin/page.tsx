@@ -16,6 +16,7 @@ export default function AdminPage() {
       <div className="w-full max-w-2xl space-y-6">
         <h1 className="text-2xl font-semibold">Admin Dashboard</h1>
         <ArloAlertCard />
+        <DisputeAlertCard />
         <AdminOverviewCard />
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
@@ -86,6 +87,30 @@ function ArloAlertCard() {
           </div>
         ))}
       </CardContent>
+    </Card>
+  );
+}
+
+function DisputeAlertCard() {
+  const disputes = useQuery(api.disputes.listOpenDisputes);
+
+  if (!disputes || disputes.length === 0) return null;
+
+  return (
+    <Card className="border-red-600 bg-red-50 dark:bg-red-950/30">
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle className="text-base text-red-700 dark:text-red-400">
+            ARLO Alert: {disputes.length} dispute{disputes.length === 1 ? "" : "s"} need review
+          </CardTitle>
+          <CardDescription className="text-red-700/80 dark:text-red-400/80">
+            A coach has disputed a submitted score.
+          </CardDescription>
+        </div>
+        <Link href="/admin/exceptions" className={cn(buttonVariants({ variant: "destructive", size: "sm" }))}>
+          Open Exceptions
+        </Link>
+      </CardHeader>
     </Card>
   );
 }

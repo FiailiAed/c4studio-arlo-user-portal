@@ -118,3 +118,32 @@ export const verifyScore = mutation({
     await ctx.db.patch(args.gameId, { scoreVerified: true });
   },
 });
+
+export const flagDispute = mutation({
+  args: {
+    gameId: v.id("games"),
+    reason: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await requireCoachMutation(ctx);
+
+    const game = await ctx.db.get(args.gameId);
+    if (!game) throw new Error("Game not found");
+
+    const teams = await getMyTeams(ctx, identity.subject);
+    const teamIds = new Set<Id<"teams">>(teams.map((t) => t._id));
+    if (!teamIds.has(game.homeTeamId) && !teamIds.has(game.awayTeamId)) {
+      throw new Error("Forbidden");
+    }
+    if (game.status !== "COMPLETED_WITH_SCORE") throw new Error("Game does not have a score to dispute");
+
+    await ctx.db.insert("disputes", {
+      gameId: args.gameId,
+      raisedByClerkId: identity.subject,
+      reason: args.reason,
+      status: "OPEN",
+    });
+
+    await ctx.db.patch(args.gameId, { status: "DISPUTED" });
+  },
+});

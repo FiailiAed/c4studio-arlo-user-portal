@@ -125,4 +125,16 @@ export default defineSchema({
   })
     .index("by_game", ["gameId"])
     .index("by_referee", ["refereeClerkId"]),
+
+  disputes: defineTable({
+    gameId: v.id("games"),
+    raisedByClerkId: v.string(), // the coach who disputed
+    reason: v.string(),
+    status: v.union(v.literal("OPEN"), v.literal("RESOLVED")),
+    resolutionNotes: v.optional(v.string()),
+    resolvedByClerkId: v.optional(v.string()),
+    resolvedAt: v.optional(v.number()),
+  })
+    .index("by_game", ["gameId"])
+    .index("by_status", ["status"]),
 });

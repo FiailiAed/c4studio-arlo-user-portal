@@ -8,6 +8,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
 
 type RosterRow = Doc<"rosters"> & { player: Doc<"players">; teamName: string };
@@ -23,7 +31,13 @@ export default function CoachDashboardPage() {
   const roster = useQuery(api.coach.getMyRoster);
   const schedule = useQuery(api.coach.getMySchedule);
   const verifyScore = useMutation(api.coach.verifyScore);
+  const flagDispute = useMutation(api.coach.flagDispute);
   const [verifyingId, setVerifyingId] = useState<Id<"games"> | null>(null);
+
+  const [disputingGame, setDisputingGame] = useState<ScheduleRow | null>(null);
+  const [disputeReason, setDisputeReason] = useState("");
+  const [disputeSubmitting, setDisputeSubmitting] = useState(false);
+  const [disputeError, setDisputeError] = useState<string | null>(null);
 
   if (club === undefined || roster === undefined || schedule === undefined) {
     return (
@@ -52,6 +66,26 @@ export default function CoachDashboardPage() {
     }
   }
 
+  function openDispute(game: ScheduleRow) {
+    setDisputingGame(game);
+    setDisputeReason("");
+    setDisputeError(null);
+  }
+
+  async function handleDispute() {
+    if (!disputingGame || !disputeReason.trim()) return;
+    setDisputeSubmitting(true);
+    setDisputeError(null);
+    try {
+      await flagDispute({ gameId: disputingGame._id, reason: disputeReason.trim() });
+      setDisputingGame(null);
+    } catch (e) {
+      setDisputeError(e instanceof Error ? e.message : "Failed to submit dispute");
+    } finally {
+      setDisputeSubmitting(false);
+    }
+  }
+
   const rosterColumns: DataTableColumn<RosterRow>[] = [
     { key: "team", header: "Team", render: (r) => r.teamName },
     { key: "player", header: "Player", render: (r) => `${r.player.firstName} ${r.player.lastName}` },
@@ -75,6 +109,8 @@ export default function CoachDashboardPage() {
               <Badge variant="outline">Needs verification</Badge>
             )}
           </span>
+        ) : g.status === "DISPUTED" ? (
+          <Badge variant="destructive">Disputed — awaiting admin review</Badge>
         ) : (
           <Badge variant="secondary">{g.status.replace(/_/g, " ")}</Badge>
         ),
@@ -112,15 +148,53 @@ export default function CoachDashboardPage() {
               emptyMessage="No games scheduled yet."
               renderActions={(g) =>
                 g.status === "COMPLETED_WITH_SCORE" && !g.scoreVerified ? (
-                  <Button size="sm" onClick={() => handleVerify(g._id)} disabled={verifyingId === g._id}>
-                    {verifyingId === g._id ? "Verifying…" : "Verify Score"}
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => handleVerify(g._id)} disabled={verifyingId === g._id}>
+                      {verifyingId === g._id ? "Verifying…" : "Verify Score"}
+                    </Button>
+                    <Button size="sm" variant="destructive" onClick={() => openDispute(g)}>
+                      Dispute
+                    </Button>
+                  </div>
                 ) : null
               }
             />
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={!!disputingGame} onOpenChange={(open) => !open && setDisputingGame(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Dispute Score{disputingGame ? `: ${disputingGame.homeTeamName} vs ${disputingGame.awayTeamName}` : ""}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Reason</label>
+              <Input
+                value={disputeReason}
+                onChange={(e) => setDisputeReason(e.target.value)}
+                placeholder="e.g. The reported score doesn't match what happened on the field."
+              />
+            </div>
+            {disputeError && <p className="text-sm text-destructive">{disputeError}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDisputingGame(null)} disabled={disputeSubmitting}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDispute}
+              disabled={disputeSubmitting || !disputeReason.trim()}
+            >
+              {disputeSubmitting ? "Submitting…" : "Submit Dispute"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
