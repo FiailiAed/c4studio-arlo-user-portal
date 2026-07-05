@@ -12,6 +12,7 @@ import type * as clubs from "../clubs.js";
 import type * as coach from "../coach.js";
 import type * as customTables from "../customTables.js";
 import type * as disputes from "../disputes.js";
+import type * as documents from "../documents.js";
 import type * as fields from "../fields.js";
 import type * as financials from "../financials.js";
 import type * as financialsActions from "../financialsActions.js";
@@ -36,6 +37,7 @@ declare const fullApi: ApiFromModules<{
   coach: typeof coach;
   customTables: typeof customTables;
   disputes: typeof disputes;
+  documents: typeof documents;
   fields: typeof fields;
   financials: typeof financials;
   financialsActions: typeof financialsActions;

@@ -137,4 +137,20 @@ export default defineSchema({
   })
     .index("by_game", ["gameId"])
     .index("by_status", ["status"]),
+
+  documents: defineTable({
+    title: v.string(),
+    storageId: v.id("_storage"),
+    category: v.optional(v.string()),
+    requiredForRoles: v.array(v.string()),
+    uploadedByClerkId: v.string(),
+  }),
+
+  documentAcknowledgments: defineTable({
+    documentId: v.id("documents"),
+    clerkId: v.string(),
+    acknowledgedAt: v.number(),
+  })
+    .index("by_document", ["documentId"])
+    .index("by_user", ["clerkId"]),
 });

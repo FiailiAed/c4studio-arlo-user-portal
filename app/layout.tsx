@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { ImpersonationBanner } from "@/components/impersonation-banner";
 import { DropdownPortalSelect } from "@/components/dropdown-portal-select";
 import { HotkeyNav } from "@/components/hotkey-nav";
+import { AcknowledgeGate } from "@/components/acknowledge-gate";
 import { ConvexClientProvider } from "./ConvexClientProvider";
 import "./globals.css";
 
@@ -43,6 +44,7 @@ export default function RootLayout({
                   <SignUpButton />
                 </Show>
                 <Show when="signed-in">
+                  <AcknowledgeGate />
                   <HotkeyNav />
                   <DropdownPortalSelect />
                   <a href="/user">My Profile</a>
