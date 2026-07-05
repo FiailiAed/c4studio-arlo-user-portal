@@ -1,7 +1,7 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
-import { useState } from "react";
+import { useAction, useMutation, useQuery } from "convex/react";
+import { useEffect, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import { ArloLoader } from "@/components/ui/arlo-loader";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,57 @@ import { Input } from "@/components/ui/input";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
 
 type GameRow = Doc<"games"> & { homeTeamName: string; awayTeamName: string; fieldName: string };
+
+function PayoutAccountCard() {
+  const account = useQuery(api.financials.getMyPayoutAccount);
+  const startOnboarding = useAction(api.financialsActions.startOnboarding);
+  const refreshMyPayoutStatus = useAction(api.financialsActions.refreshMyPayoutStatus);
+  const [connecting, setConnecting] = useState(false);
+
+  useEffect(() => {
+    if (account?.stripeConnectId) {
+      refreshMyPayoutStatus();
+    }
+    // Only refresh once per mount (e.g. right after returning from Stripe onboarding).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account?.stripeConnectId]);
+
+  if (account === undefined) return null;
+
+  async function handleConnect() {
+    setConnecting(true);
+    try {
+      const { url } = await startOnboarding({ returnUrl: `${window.location.origin}/referee` });
+      window.location.href = url;
+    } finally {
+      setConnecting(false);
+    }
+  }
+
+  const status = !account?.stripeConnectId
+    ? "not_connected"
+    : account.transfersActive
+      ? "active"
+      : "incomplete";
+
+  return (
+    <Card>
+      <CardHeader className="space-y-2">
+        <CardTitle className="text-base">Payout Account</CardTitle>
+        {status === "active" && <Badge variant="default">Active</Badge>}
+        {status === "incomplete" && <Badge variant="outline">Onboarding incomplete</Badge>}
+        {status === "not_connected" && <Badge variant="destructive">Not connected</Badge>}
+      </CardHeader>
+      {status !== "active" && (
+        <CardContent>
+          <Button className="w-full" onClick={handleConnect} disabled={connecting}>
+            {connecting ? "Redirecting…" : status === "incomplete" ? "Continue Onboarding" : "Connect Stripe Account"}
+          </Button>
+        </CardContent>
+      )}
+    </Card>
+  );
+}
 
 export default function RefereeDashboardPage() {
   const games = useQuery(api.games.listMyAssignedGames);
@@ -81,6 +132,8 @@ export default function RefereeDashboardPage() {
     <main className="flex flex-1 flex-col items-center py-8 px-4">
       <div className="w-full max-w-md space-y-4">
         <h1 className="text-2xl font-semibold">My Games</h1>
+
+        <PayoutAccountCard />
 
         {upcoming.length === 0 && (
           <Card>

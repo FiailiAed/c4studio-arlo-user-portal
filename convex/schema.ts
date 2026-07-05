@@ -96,6 +96,7 @@ export default defineSchema({
   refereeProfiles: defineTable({
     clerkId: v.string(),
     stripeConnectId: v.optional(v.string()),
+    transfersActive: v.optional(v.boolean()), // cached from stripe.accounts.retrieve, refreshed on page load
   }).index("by_clerk_id", ["clerkId"]),
 
   clubs: defineTable({

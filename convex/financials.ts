@@ -1,7 +1,7 @@
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { requireLeagueAdminMutation, requireLeagueAdminQuery } from "./lib/auth";
+import { requireLeagueAdminMutation, requireLeagueAdminQuery, requireRefereeQuery } from "./lib/auth";
 
 const DEFAULT_REFEREE_PAY_RATE_CENTS = 5000; // $50/game
 const PLATFORM_FEE_RATE = 0.015;
@@ -46,7 +46,11 @@ export const listReferees = query({
         .query("refereeProfiles")
         .withIndex("by_clerk_id", (q) => q.eq("clerkId", referee.clerkId))
         .unique();
-      results.push({ ...referee, stripeConnectId: profile?.stripeConnectId });
+      results.push({
+        ...referee,
+        stripeConnectId: profile?.stripeConnectId,
+        transfersActive: profile?.transfersActive,
+      });
     }
     return results;
   },
@@ -189,5 +193,94 @@ export const recordPayoutResult = internalMutation({
       stripeTransferId: args.stripeTransferId,
       failureReason: args.failureReason,
     });
+  },
+});
+
+export const getMyPayoutAccount = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await requireRefereeQuery(ctx);
+    if (!identity) return null;
+
+    const profile = await ctx.db
+      .query("refereeProfiles")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+
+    return {
+      stripeConnectId: profile?.stripeConnectId,
+      transfersActive: profile?.transfersActive,
+    };
+  },
+});
+
+export const getMyRefereeContext = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await requireRefereeQuery(ctx);
+    if (!identity) return null;
+
+    const [user, profile] = await Promise.all([
+      ctx.db
+        .query("users")
+        .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+        .unique(),
+      ctx.db
+        .query("refereeProfiles")
+        .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+        .unique(),
+    ]);
+
+    return {
+      clerkId: identity.subject,
+      email: user?.email,
+      stripeConnectId: profile?.stripeConnectId,
+    };
+  },
+});
+
+export const getRefereeStripeAccount = internalQuery({
+  args: { refereeClerkId: v.string() },
+  handler: async (ctx, args) => {
+    const profile = await ctx.db
+      .query("refereeProfiles")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.refereeClerkId))
+      .unique();
+    return { stripeConnectId: profile?.stripeConnectId };
+  },
+});
+
+export const savePayoutAccount = internalMutation({
+  args: {
+    clerkId: v.string(),
+    stripeConnectId: v.optional(v.string()),
+    transfersActive: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("refereeProfiles")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
+      .unique();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        ...(args.stripeConnectId !== undefined ? { stripeConnectId: args.stripeConnectId } : {}),
+        ...(args.transfersActive !== undefined ? { transfersActive: args.transfersActive } : {}),
+      });
+    } else {
+      await ctx.db.insert("refereeProfiles", {
+        clerkId: args.clerkId,
+        stripeConnectId: args.stripeConnectId,
+        transfersActive: args.transfersActive,
+      });
+    }
+  },
+});
+
+export const assertLeagueAdmin = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await requireLeagueAdminQuery(ctx);
+    return identity ? { clerkId: identity.subject } : null;
   },
 });

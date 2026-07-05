@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import { ArloLoader } from "@/components/ui/arlo-loader";
@@ -37,12 +37,14 @@ export default function AdminFinancialsPage() {
   const updateLeagueSettings = useMutation(api.financials.updateLeagueSettings);
   const setRefereeStripeAccount = useMutation(api.financials.setRefereeStripeAccount);
   const retryPayout = useMutation(api.financials.retryPayout);
+  const refreshRefereePayoutStatus = useAction(api.financialsActions.refreshRefereePayoutStatus);
 
   const [rateDraft, setRateDraft] = useState<string | null>(null);
   const [rateSubmitting, setRateSubmitting] = useState(false);
 
   const [stripeIdDrafts, setStripeIdDrafts] = useState<Record<string, string>>({});
   const [retryingId, setRetryingId] = useState<Id<"payoutLedger"> | null>(null);
+  const [refreshingId, setRefreshingId] = useState<string | null>(null);
 
   if (settings === undefined || referees === undefined || ledger === undefined) {
     return (
@@ -79,6 +81,15 @@ export default function AdminFinancialsPage() {
       await retryPayout({ payoutLedgerId });
     } finally {
       setRetryingId(null);
+    }
+  }
+
+  async function handleRefreshStatus(refereeClerkId: string) {
+    setRefreshingId(refereeClerkId);
+    try {
+      await refreshRefereePayoutStatus({ refereeClerkId });
+    } finally {
+      setRefreshingId(null);
     }
   }
 
@@ -146,20 +157,40 @@ export default function AdminFinancialsPage() {
             {(referees ?? []).length === 0 ? (
               <p className="text-sm text-muted-foreground">No users with the referee role yet.</p>
             ) : (
-              (referees ?? []).map((referee) => (
-                <div key={referee._id} className="flex items-center gap-2">
-                  <span className="w-48 truncate text-sm">
-                    {`${referee.firstName ?? ""} ${referee.lastName ?? ""}`.trim() || referee.email || referee.clerkId}
-                  </span>
-                  <Input
-                    value={stripeIdDrafts[referee.clerkId] ?? referee.stripeConnectId ?? ""}
-                    onChange={(e) => setStripeIdDrafts((prev) => ({ ...prev, [referee.clerkId]: e.target.value }))}
-                    onBlur={() => commitStripeId(referee.clerkId)}
-                    placeholder="acct_..."
-                    className="max-w-xs"
-                  />
-                </div>
-              ))
+              (referees ?? []).map((referee) => {
+                const status = !referee.stripeConnectId
+                  ? "not_connected"
+                  : referee.transfersActive
+                    ? "active"
+                    : "incomplete";
+                return (
+                  <div key={referee._id} className="flex items-center gap-2">
+                    <span className="w-48 truncate text-sm">
+                      {`${referee.firstName ?? ""} ${referee.lastName ?? ""}`.trim() || referee.email || referee.clerkId}
+                    </span>
+                    <Input
+                      value={stripeIdDrafts[referee.clerkId] ?? referee.stripeConnectId ?? ""}
+                      onChange={(e) => setStripeIdDrafts((prev) => ({ ...prev, [referee.clerkId]: e.target.value }))}
+                      onBlur={() => commitStripeId(referee.clerkId)}
+                      placeholder="acct_..."
+                      className="max-w-xs"
+                    />
+                    {status === "active" && <Badge variant="default">Active</Badge>}
+                    {status === "incomplete" && <Badge variant="outline">Onboarding incomplete</Badge>}
+                    {status === "not_connected" && (
+                      <Badge variant="destructive" className="text-muted-foreground">Not connected</Badge>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleRefreshStatus(referee.clerkId)}
+                      disabled={!referee.stripeConnectId || refreshingId === referee.clerkId}
+                    >
+                      {refreshingId === referee.clerkId ? "Refreshing…" : "Refresh Status"}
+                    </Button>
+                  </div>
+                );
+              })
             )}
           </CardContent>
         </Card>
