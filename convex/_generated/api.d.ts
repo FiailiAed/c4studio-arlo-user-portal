@@ -20,6 +20,7 @@ import type * as games from "../games.js";
 import type * as http from "../http.js";
 import type * as impersonation from "../impersonation.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as migrations_sjylaxBackfill from "../migrations/sjylaxBackfill.js";
 import type * as orgInvitations from "../orgInvitations.js";
 import type * as orgMemberships from "../orgMemberships.js";
 import type * as orgUnits from "../orgUnits.js";
@@ -49,6 +50,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   impersonation: typeof impersonation;
   "lib/auth": typeof lib_auth;
+  "migrations/sjylaxBackfill": typeof migrations_sjylaxBackfill;
   orgInvitations: typeof orgInvitations;
   orgMemberships: typeof orgMemberships;
   orgUnits: typeof orgUnits;
