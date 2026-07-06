@@ -19,9 +19,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useOrgId } from "@/lib/use-org-id";
+import { buildFlatOrgUnitOptions } from "@/lib/org-units";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 
-type ClubRow = Doc<"clubs"> & { coachName?: string };
+type ClubRow = Doc<"clubs"> & { coachName?: string; orgUnitName?: string; orgUnitType?: string };
 
 const SELECT_CLASSNAME =
   "rounded-md border border-input bg-background px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring/50";
@@ -30,13 +31,18 @@ export default function AdminClubsPage() {
   const orgId = useOrgId();
   const clubs = useQuery(api.clubs.listClubs, orgId ? { orgId } : "skip");
   const coaches = useQuery(api.clubs.listCoaches, orgId ? { orgId } : "skip");
+  const orgUnits = useQuery(api.orgUnits.listOrgUnits, orgId ? { orgId } : "skip");
   const createClub = useMutation(api.clubs.createClub);
   const renameClub = useMutation(api.clubs.renameClub);
   const assignCoach = useMutation(api.clubs.assignCoach);
+  const assignClubOrgUnit = useMutation(api.clubs.assignClubOrgUnit);
   const deleteClub = useMutation(api.clubs.deleteClub);
+
+  const orgUnitOptions = buildFlatOrgUnitOptions(orgUnits ?? []);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
+  const [newClubOrgUnitId, setNewClubOrgUnitId] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const [renameDrafts, setRenameDrafts] = useState<Record<string, string>>({});
@@ -45,11 +51,15 @@ export default function AdminClubsPage() {
   const [assignCoachId, setAssignCoachId] = useState<string>("");
   const [assignSubmitting, setAssignSubmitting] = useState(false);
 
+  const [assigningOrgUnitClub, setAssigningOrgUnitClub] = useState<ClubRow | null>(null);
+  const [assignOrgUnitId, setAssignOrgUnitId] = useState<string>("");
+  const [assignOrgUnitSubmitting, setAssignOrgUnitSubmitting] = useState(false);
+
   const [pendingDelete, setPendingDelete] = useState<ClubRow | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
-  if (!orgId || clubs === undefined || coaches === undefined) {
+  if (!orgId || clubs === undefined || coaches === undefined || orgUnits === undefined) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <ArloLoader />
@@ -58,12 +68,13 @@ export default function AdminClubsPage() {
   }
 
   async function handleCreate() {
-    if (!orgId || !name.trim()) return;
+    if (!orgId || !name.trim() || !newClubOrgUnitId) return;
     setSubmitting(true);
     try {
-      await createClub({ orgId, name: name.trim() });
+      await createClub({ orgId, name: name.trim(), orgUnitId: newClubOrgUnitId as Id<"orgUnits"> });
       setCreateOpen(false);
       setName("");
+      setNewClubOrgUnitId("");
     } finally {
       setSubmitting(false);
     }
@@ -92,6 +103,26 @@ export default function AdminClubsPage() {
       setAssigningClub(null);
     } finally {
       setAssignSubmitting(false);
+    }
+  }
+
+  function openAssignOrgUnit(club: ClubRow) {
+    setAssigningOrgUnitClub(club);
+    setAssignOrgUnitId(club.orgUnitId ?? "");
+  }
+
+  async function handleAssignOrgUnitSubmit() {
+    if (!orgId || !assigningOrgUnitClub || !assignOrgUnitId) return;
+    setAssignOrgUnitSubmitting(true);
+    try {
+      await assignClubOrgUnit({
+        orgId,
+        clubId: assigningOrgUnitClub._id,
+        orgUnitId: assignOrgUnitId as Id<"orgUnits">,
+      });
+      setAssigningOrgUnitClub(null);
+    } finally {
+      setAssignOrgUnitSubmitting(false);
     }
   }
 
@@ -132,6 +163,16 @@ export default function AdminClubsPage() {
           <Badge variant="outline" className="text-muted-foreground">Unassigned</Badge>
         ),
     },
+    {
+      key: "orgUnit",
+      header: "Org Unit",
+      render: (club) =>
+        club.orgUnitName ? (
+          <Badge variant="secondary">{club.orgUnitName}</Badge>
+        ) : (
+          <Badge variant="outline" className="text-muted-foreground">Unassigned</Badge>
+        ),
+    },
   ];
 
   return (
@@ -159,6 +200,9 @@ export default function AdminClubsPage() {
               <Button size="sm" variant="outline" onClick={() => openAssign(club)}>
                 Assign Coach
               </Button>
+              <Button size="sm" variant="outline" onClick={() => openAssignOrgUnit(club)}>
+                Assign Org Unit
+              </Button>
               <Link
                 href={`/admin/clubs/${club._id}/roster`}
                 className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
@@ -182,12 +226,63 @@ export default function AdminClubsPage() {
             <label className="text-sm font-medium">Club name</label>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Riverside Youth Lacrosse" />
           </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Org Unit</label>
+            <select
+              value={newClubOrgUnitId}
+              onChange={(e) => setNewClubOrgUnitId(e.target.value)}
+              className={cn(SELECT_CLASSNAME, "w-full")}
+            >
+              <option value="" disabled>Select…</option>
+              {orgUnitOptions.map((o) => (
+                <option key={o.id} value={o.id}>{o.label}</option>
+              ))}
+            </select>
+            {orgUnitOptions.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                No org units yet — create one on the{" "}
+                <Link href="/admin/org-units" className="underline underline-offset-4">Org Structure</Link> page first.
+              </p>
+            )}
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={submitting}>
               Cancel
             </Button>
-            <Button onClick={handleCreate} disabled={submitting || !name.trim()}>
+            <Button onClick={handleCreate} disabled={submitting || !name.trim() || !newClubOrgUnitId}>
               {submitting ? "Creating…" : "Create Club"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!assigningOrgUnitClub} onOpenChange={(open) => !open && setAssigningOrgUnitClub(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign Org Unit</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1">
+            {orgUnitOptions.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No org units yet.</p>
+            ) : (
+              <select
+                value={assignOrgUnitId}
+                onChange={(e) => setAssignOrgUnitId(e.target.value)}
+                className={cn(SELECT_CLASSNAME, "w-full")}
+              >
+                <option value="" disabled>Select…</option>
+                {orgUnitOptions.map((o) => (
+                  <option key={o.id} value={o.id}>{o.label}</option>
+                ))}
+              </select>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssigningOrgUnitClub(null)} disabled={assignOrgUnitSubmitting}>
+              Cancel
+            </Button>
+            <Button onClick={handleAssignOrgUnitSubmit} disabled={assignOrgUnitSubmitting || !assignOrgUnitId}>
+              {assignOrgUnitSubmitting ? "Saving…" : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>

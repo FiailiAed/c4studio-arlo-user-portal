@@ -106,6 +106,10 @@ export default defineSchema({
     orgId: v.string(),
     name: v.string(),
     clubId: v.optional(v.id("clubs")),
+    // Optional at the schema level (existing rows predate this field) —
+    // createTeam requires it going forward; existing rows show "Unassigned"
+    // until placed via assignTeamOrgUnit.
+    orgUnitId: v.optional(v.id("orgUnits")),
   })
     .index("by_club", ["clubId"])
     .index("by_org", ["orgId"]),
@@ -146,6 +150,9 @@ export default defineSchema({
     orgId: v.string(),
     name: v.string(),
     coachClerkId: v.optional(v.string()),
+    // Same optional-forever pattern as teams.orgUnitId — createClub requires
+    // it going forward, existing rows show "Unassigned" until placed.
+    orgUnitId: v.optional(v.id("orgUnits")),
   })
     .index("by_coach", ["coachClerkId"])
     .index("by_org", ["orgId"]),

@@ -8,10 +8,17 @@ export const listTeams = query({
     const identity = await requireLeagueAdminQuery(ctx, args.orgId);
     if (!identity) return null;
 
-    return await ctx.db
+    const teams = await ctx.db
       .query("teams")
       .withIndex("by_org", (q) => q.eq("orgId", args.orgId))
       .collect();
+
+    const results = [];
+    for (const team of teams) {
+      const orgUnit = team.orgUnitId ? await ctx.db.get(team.orgUnitId) : null;
+      results.push({ ...team, orgUnitName: orgUnit?.name, orgUnitType: orgUnit?.unitType });
+    }
+    return results;
   },
 });
 
@@ -20,11 +27,39 @@ export const createTeam = mutation({
     orgId: v.string(),
     name: v.string(),
     clubId: v.optional(v.id("clubs")),
+    orgUnitId: v.id("orgUnits"),
   },
   handler: async (ctx, args) => {
     await requireLeagueAdminMutation(ctx, args.orgId);
 
-    return await ctx.db.insert("teams", { orgId: args.orgId, name: args.name, clubId: args.clubId });
+    const orgUnit = await ctx.db.get(args.orgUnitId);
+    if (!orgUnit || orgUnit.orgId !== args.orgId) throw new Error("Org unit not found in this org");
+
+    return await ctx.db.insert("teams", {
+      orgId: args.orgId,
+      name: args.name,
+      clubId: args.clubId,
+      orgUnitId: args.orgUnitId,
+    });
+  },
+});
+
+export const assignTeamOrgUnit = mutation({
+  args: {
+    orgId: v.string(),
+    teamId: v.id("teams"),
+    orgUnitId: v.id("orgUnits"),
+  },
+  handler: async (ctx, args) => {
+    await requireLeagueAdminMutation(ctx, args.orgId);
+
+    const team = await ctx.db.get(args.teamId);
+    if (!team || team.orgId !== args.orgId) throw new Error("Team not found");
+
+    const orgUnit = await ctx.db.get(args.orgUnitId);
+    if (!orgUnit || orgUnit.orgId !== args.orgId) throw new Error("Org unit not found in this org");
+
+    await ctx.db.patch(args.teamId, { orgUnitId: args.orgUnitId });
   },
 });
 

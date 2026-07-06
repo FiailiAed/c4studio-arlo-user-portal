@@ -17,6 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useOrgId } from "@/lib/use-org-id";
+import { buildFlatOrgUnitOptions } from "@/lib/org-units";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 
 const SELECT_CLASSNAME =
@@ -26,13 +27,18 @@ export default function AdminTeamsPage() {
   const orgId = useOrgId();
   const teams = useQuery(api.teams.listTeams, orgId ? { orgId } : "skip");
   const clubs = useQuery(api.clubs.listClubs, orgId ? { orgId } : "skip");
+  const orgUnits = useQuery(api.orgUnits.listOrgUnits, orgId ? { orgId } : "skip");
   const createTeam = useMutation(api.teams.createTeam);
   const renameTeam = useMutation(api.teams.renameTeam);
   const deleteTeam = useMutation(api.teams.deleteTeam);
   const assignTeamToClub = useMutation(api.teams.assignTeamToClub);
+  const assignTeamOrgUnit = useMutation(api.teams.assignTeamOrgUnit);
+
+  const orgUnitOptions = buildFlatOrgUnitOptions(orgUnits ?? []);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
+  const [newTeamOrgUnitId, setNewTeamOrgUnitId] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const [renameDrafts, setRenameDrafts] = useState<Record<string, string>>({});
@@ -41,7 +47,7 @@ export default function AdminTeamsPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
-  if (!orgId || teams === undefined || clubs === undefined) {
+  if (!orgId || teams === undefined || clubs === undefined || orgUnits === undefined) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <ArloLoader />
@@ -50,12 +56,13 @@ export default function AdminTeamsPage() {
   }
 
   async function handleCreate() {
-    if (!orgId || !name.trim()) return;
+    if (!orgId || !name.trim() || !newTeamOrgUnitId) return;
     setSubmitting(true);
     try {
-      await createTeam({ orgId, name: name.trim() });
+      await createTeam({ orgId, name: name.trim(), orgUnitId: newTeamOrgUnitId as Id<"orgUnits"> });
       setCreateOpen(false);
       setName("");
+      setNewTeamOrgUnitId("");
     } finally {
       setSubmitting(false);
     }
@@ -89,6 +96,11 @@ export default function AdminTeamsPage() {
     await assignTeamToClub({ orgId, teamId, clubId: clubId ? (clubId as Id<"clubs">) : undefined });
   }
 
+  async function handleOrgUnitChange(teamId: Id<"teams">, orgUnitId: string) {
+    if (!orgId || !orgUnitId) return;
+    await assignTeamOrgUnit({ orgId, teamId, orgUnitId: orgUnitId as Id<"orgUnits"> });
+  }
+
   const columns: DataTableColumn<Doc<"teams">>[] = [
     {
       key: "name",
@@ -114,6 +126,22 @@ export default function AdminTeamsPage() {
           <option value="">No club</option>
           {clubs?.map((club) => (
             <option key={club._id} value={club._id}>{club.name}</option>
+          ))}
+        </select>
+      ),
+    },
+    {
+      key: "orgUnit",
+      header: "Org Unit",
+      render: (team) => (
+        <select
+          value={team.orgUnitId ?? ""}
+          onChange={(e) => handleOrgUnitChange(team._id, e.target.value)}
+          className={cn(SELECT_CLASSNAME)}
+        >
+          {!team.orgUnitId && <option value="" disabled>Unassigned</option>}
+          {orgUnitOptions.map((o) => (
+            <option key={o.id} value={o.id}>{o.label}</option>
           ))}
         </select>
       ),
@@ -152,11 +180,24 @@ export default function AdminTeamsPage() {
             <label className="text-sm font-medium">Team name</label>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Eagles" />
           </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Org Unit</label>
+            <select
+              value={newTeamOrgUnitId}
+              onChange={(e) => setNewTeamOrgUnitId(e.target.value)}
+              className={cn(SELECT_CLASSNAME, "w-full")}
+            >
+              <option value="" disabled>Select…</option>
+              {orgUnitOptions.map((o) => (
+                <option key={o.id} value={o.id}>{o.label}</option>
+              ))}
+            </select>
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={submitting}>
               Cancel
             </Button>
-            <Button onClick={handleCreate} disabled={submitting || !name.trim()}>
+            <Button onClick={handleCreate} disabled={submitting || !name.trim() || !newTeamOrgUnitId}>
               {submitting ? "Creating…" : "Create Team"}
             </Button>
           </DialogFooter>

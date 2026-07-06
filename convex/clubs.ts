@@ -14,15 +14,20 @@ export const listClubs = query({
       .collect();
     const results = [];
     for (const club of clubs) {
-      const coach = club.coachClerkId
-        ? await ctx.db
-            .query("users")
-            .withIndex("by_clerk_id", (q) => q.eq("clerkId", club.coachClerkId as string))
-            .unique()
-        : null;
+      const [coach, orgUnit] = await Promise.all([
+        club.coachClerkId
+          ? ctx.db
+              .query("users")
+              .withIndex("by_clerk_id", (q) => q.eq("clerkId", club.coachClerkId as string))
+              .unique()
+          : null,
+        club.orgUnitId ? ctx.db.get(club.orgUnitId) : null,
+      ]);
       results.push({
         ...club,
         coachName: coach ? `${coach.firstName ?? ""} ${coach.lastName ?? ""}`.trim() || coach.email : undefined,
+        orgUnitName: orgUnit?.name,
+        orgUnitType: orgUnit?.unitType,
       });
     }
     return results;
@@ -74,11 +79,33 @@ export const listCoaches = query({
 });
 
 export const createClub = mutation({
-  args: { orgId: v.string(), name: v.string() },
+  args: { orgId: v.string(), name: v.string(), orgUnitId: v.id("orgUnits") },
   handler: async (ctx, args) => {
     await requireLeagueAdminMutation(ctx, args.orgId);
 
-    return await ctx.db.insert("clubs", { orgId: args.orgId, name: args.name });
+    const orgUnit = await ctx.db.get(args.orgUnitId);
+    if (!orgUnit || orgUnit.orgId !== args.orgId) throw new Error("Org unit not found in this org");
+
+    return await ctx.db.insert("clubs", { orgId: args.orgId, name: args.name, orgUnitId: args.orgUnitId });
+  },
+});
+
+export const assignClubOrgUnit = mutation({
+  args: {
+    orgId: v.string(),
+    clubId: v.id("clubs"),
+    orgUnitId: v.id("orgUnits"),
+  },
+  handler: async (ctx, args) => {
+    await requireLeagueAdminMutation(ctx, args.orgId);
+
+    const club = await ctx.db.get(args.clubId);
+    if (!club || club.orgId !== args.orgId) throw new Error("Club not found");
+
+    const orgUnit = await ctx.db.get(args.orgUnitId);
+    if (!orgUnit || orgUnit.orgId !== args.orgId) throw new Error("Org unit not found in this org");
+
+    await ctx.db.patch(args.clubId, { orgUnitId: args.orgUnitId });
   },
 });
 
