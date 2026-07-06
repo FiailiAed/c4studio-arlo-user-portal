@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import type { Doc } from "../../../../convex/_generated/dataModel";
+import { useActiveOrg } from "@/components/active-org-provider";
 
 interface FieldDraft {
   name: string;
@@ -23,7 +24,8 @@ interface FieldDraft {
 }
 
 export default function AdminFieldsPage() {
-  const fields = useQuery(api.fields.listFields);
+  const { activeOrgId } = useActiveOrg();
+  const fields = useQuery(api.fields.listFields, activeOrgId ? { orgId: activeOrgId } : "skip");
   const createField = useMutation(api.fields.createField);
   const renameField = useMutation(api.fields.renameField);
   const deleteField = useMutation(api.fields.deleteField);
@@ -48,10 +50,10 @@ export default function AdminFieldsPage() {
   }
 
   async function handleCreate() {
-    if (!name.trim()) return;
+    if (!name.trim() || !activeOrgId) return;
     setSubmitting(true);
     try {
-      await createField({ name: name.trim(), location: location.trim() || undefined });
+      await createField({ orgId: activeOrgId, name: name.trim(), location: location.trim() || undefined });
       setCreateOpen(false);
       setName("");
       setLocation("");

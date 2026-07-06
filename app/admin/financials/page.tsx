@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
+import { useActiveOrg } from "@/components/active-org-provider";
 
 type LedgerRow = Doc<"payoutLedger"> & {
   gameMatchup: string;
@@ -30,9 +31,10 @@ function centsToDollarsInput(cents: number): string {
 }
 
 export default function AdminFinancialsPage() {
-  const settings = useQuery(api.financials.getLeagueSettings);
-  const referees = useQuery(api.financials.listReferees);
-  const ledger = useQuery(api.financials.listPayoutLedger);
+  const { activeOrgId } = useActiveOrg();
+  const settings = useQuery(api.financials.getLeagueSettings, activeOrgId ? { orgId: activeOrgId } : "skip");
+  const referees = useQuery(api.financials.listReferees, activeOrgId ? { orgId: activeOrgId } : "skip");
+  const ledger = useQuery(api.financials.listPayoutLedger, activeOrgId ? { orgId: activeOrgId } : "skip");
 
   const updateLeagueSettings = useMutation(api.financials.updateLeagueSettings);
   const setRefereeStripeAccount = useMutation(api.financials.setRefereeStripeAccount);
@@ -57,12 +59,12 @@ export default function AdminFinancialsPage() {
   const rateValue = rateDraft ?? (settings ? centsToDollarsInput(settings.refereePayRateCents) : "0.00");
 
   async function commitRate() {
-    if (rateDraft === null) return;
+    if (rateDraft === null || !activeOrgId) return;
     const dollars = Number(rateDraft);
     if (Number.isNaN(dollars) || dollars < 0) return;
     setRateSubmitting(true);
     try {
-      await updateLeagueSettings({ refereePayRateCents: Math.round(dollars * 100) });
+      await updateLeagueSettings({ orgId: activeOrgId, refereePayRateCents: Math.round(dollars * 100) });
       setRateDraft(null);
     } finally {
       setRateSubmitting(false);
@@ -71,8 +73,8 @@ export default function AdminFinancialsPage() {
 
   async function commitStripeId(clerkId: string) {
     const draft = stripeIdDrafts[clerkId];
-    if (draft === undefined) return;
-    await setRefereeStripeAccount({ refereeClerkId: clerkId, stripeConnectId: draft.trim() || undefined });
+    if (draft === undefined || !activeOrgId) return;
+    await setRefereeStripeAccount({ orgId: activeOrgId, refereeClerkId: clerkId, stripeConnectId: draft.trim() || undefined });
   }
 
   async function handleRetry(payoutLedgerId: Id<"payoutLedger">) {
@@ -85,9 +87,10 @@ export default function AdminFinancialsPage() {
   }
 
   async function handleRefreshStatus(refereeClerkId: string) {
+    if (!activeOrgId) return;
     setRefreshingId(refereeClerkId);
     try {
-      await refreshRefereePayoutStatus({ refereeClerkId });
+      await refreshRefereePayoutStatus({ orgId: activeOrgId, refereeClerkId });
     } finally {
       setRefreshingId(null);
     }

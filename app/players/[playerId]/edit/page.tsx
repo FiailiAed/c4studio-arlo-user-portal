@@ -7,6 +7,7 @@ import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { ArloLoader } from "@/components/ui/arlo-loader";
 import { PlayerForm, type PlayerFormValues } from "@/components/players/player-form";
+import { useActiveOrg } from "@/components/active-org-provider";
 
 interface EditPlayerPageProps {
   params: Promise<{ playerId: string }>;
@@ -15,7 +16,8 @@ interface EditPlayerPageProps {
 export default function EditPlayerPage({ params }: EditPlayerPageProps) {
   const { playerId } = use(params);
   const router = useRouter();
-  const players = useQuery(api.players.listMyPlayers);
+  const { activeOrgId } = useActiveOrg();
+  const players = useQuery(api.players.listMyPlayers, activeOrgId ? { orgId: activeOrgId } : "skip");
   const updatePlayer = useMutation(api.players.updatePlayer);
 
   const player = players?.find((p) => p._id === playerId);

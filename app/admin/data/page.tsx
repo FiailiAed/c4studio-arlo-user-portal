@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useActiveOrg } from "@/components/active-org-provider";
 
 type ColumnType = "text" | "number" | "date" | "boolean" | "select";
 
@@ -36,7 +37,8 @@ function emptyColumnDraft(): ColumnDraft {
 }
 
 export default function AdminDataPage() {
-  const tables = useQuery(api.customTables.listTables);
+  const { activeOrgId } = useActiveOrg();
+  const tables = useQuery(api.customTables.listTables, activeOrgId ? { orgId: activeOrgId } : "skip");
   const createTable = useMutation(api.customTables.createTable);
   const router = useRouter();
 
@@ -63,10 +65,11 @@ export default function AdminDataPage() {
   }
 
   async function handleSubmit() {
-    if (!name.trim() || columns.length === 0) return;
+    if (!name.trim() || columns.length === 0 || !activeOrgId) return;
     setSubmitting(true);
     try {
       const tableId = await createTable({
+        orgId: activeOrgId,
         name: name.trim(),
         columns: columns
           .filter((col) => col.label.trim())

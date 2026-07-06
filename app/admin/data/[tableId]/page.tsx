@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
+import { useActiveOrg } from "@/components/active-org-provider";
 
 type ColumnType = "text" | "number" | "date" | "boolean" | "select";
 type FieldValue = string | number | boolean | undefined;
@@ -184,8 +185,12 @@ export default function AdminDataTablePage({
 }) {
   const { tableId } = use(params);
   const id = tableId as Id<"tableDefinitions">;
+  const { activeOrgId } = useActiveOrg();
 
-  const result = useQuery(api.customTables.getTable, { tableId: id });
+  const result = useQuery(
+    api.customTables.getTable,
+    activeOrgId ? { orgId: activeOrgId, tableId: id } : "skip"
+  );
   const addColumn = useMutation(api.customTables.addColumn);
   const renameColumn = useMutation(api.customTables.renameColumn);
   const deleteColumn = useMutation(api.customTables.deleteColumn);

@@ -17,9 +17,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { useActiveOrg } from "@/components/active-org-provider";
 
 export default function PlayersPage() {
-  const players = useQuery(api.players.listMyPlayers);
+  const { activeOrgId } = useActiveOrg();
+  const players = useQuery(api.players.listMyPlayers, activeOrgId ? { orgId: activeOrgId } : "skip");
   const deletePlayer = useMutation(api.players.deletePlayer);
   const [pendingDelete, setPendingDelete] = useState<{ id: Id<"players">; label: string } | null>(
     null

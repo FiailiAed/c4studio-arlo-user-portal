@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getRoleConfig, type AppRole } from "@/lib/roles";
 import type { Doc } from "../../../../convex/_generated/dataModel";
+import { useActiveOrg } from "@/components/active-org-provider";
 
 const ROLES: AppRole[] = ["family", "referee", "program_admin", "coach", "league_admin", "super_admin"];
 
@@ -30,7 +31,8 @@ function filenameToTitle(filename: string): string {
 type DocumentRow = Doc<"documents"> & { url: string | null; acknowledgmentCount: number };
 
 export default function AdminDocumentsPage() {
-  const documents = useQuery(api.documents.listDocuments);
+  const { activeOrgId } = useActiveOrg();
+  const documents = useQuery(api.documents.listDocuments, activeOrgId ? { orgId: activeOrgId } : "skip");
   const generateUploadUrl = useMutation(api.documents.generateUploadUrl);
   const saveDocumentMetadata = useMutation(api.documents.saveDocumentMetadata);
   const deleteDocument = useMutation(api.documents.deleteDocument);
@@ -67,11 +69,15 @@ export default function AdminDocumentsPage() {
       setUploadError("Choose a file before uploading.");
       return;
     }
+    if (!activeOrgId) {
+      setUploadError("No active organization selected.");
+      return;
+    }
 
     setUploading(true);
     setUploadError(null);
     try {
-      const uploadUrl = await generateUploadUrl();
+      const uploadUrl = await generateUploadUrl({ orgId: activeOrgId });
       const res = await fetch(uploadUrl, {
         method: "POST",
         headers: { "Content-Type": selectedFile.type },
@@ -81,6 +87,7 @@ export default function AdminDocumentsPage() {
       const { storageId } = await res.json();
 
       await saveDocumentMetadata({
+        orgId: activeOrgId,
         title: title.trim(),
         storageId,
         category: category.trim() || undefined,

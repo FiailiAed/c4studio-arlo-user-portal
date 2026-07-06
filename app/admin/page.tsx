@@ -61,7 +61,8 @@ export default function AdminPage() {
 const ALERT_WINDOW_MS = 48 * 60 * 60 * 1000;
 
 function ArloAlertCard() {
-  const games = useQuery(api.games.listGames, {});
+  const { activeOrgId } = useActiveOrg();
+  const games = useQuery(api.games.listGames, activeOrgId ? { orgId: activeOrgId } : "skip");
   const [now] = useState(() => Date.now());
 
   if (!games) return null;
@@ -105,7 +106,8 @@ function ArloAlertCard() {
 }
 
 function DisputeAlertCard() {
-  const disputes = useQuery(api.disputes.listOpenDisputes);
+  const { activeOrgId } = useActiveOrg();
+  const disputes = useQuery(api.disputes.listOpenDisputes, activeOrgId ? { orgId: activeOrgId } : "skip");
 
   if (!disputes || disputes.length === 0) return null;
 

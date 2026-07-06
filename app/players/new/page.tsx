@@ -4,13 +4,16 @@ import { useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
 import { api } from "../../../convex/_generated/api";
 import { PlayerForm, type PlayerFormValues } from "@/components/players/player-form";
+import { useActiveOrg } from "@/components/active-org-provider";
 
 export default function NewPlayerPage() {
   const router = useRouter();
+  const { activeOrgId } = useActiveOrg();
   const createPlayer = useMutation(api.players.createPlayer);
 
   const handleSubmit = async (values: PlayerFormValues) => {
-    await createPlayer(values);
+    if (!activeOrgId) return;
+    await createPlayer({ orgId: activeOrgId, ...values });
     router.push("/players");
   };
 

@@ -17,13 +17,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
+import { useActiveOrg } from "@/components/active-org-provider";
 
 const SELECT_CLASSNAME =
   "rounded-md border border-input bg-background px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring/50";
 
 export default function AdminTeamsPage() {
-  const teams = useQuery(api.teams.listTeams);
-  const clubs = useQuery(api.clubs.listClubs);
+  const { activeOrgId } = useActiveOrg();
+  const teams = useQuery(api.teams.listTeams, activeOrgId ? { orgId: activeOrgId } : "skip");
+  const clubs = useQuery(api.clubs.listClubs, activeOrgId ? { orgId: activeOrgId } : "skip");
   const createTeam = useMutation(api.teams.createTeam);
   const renameTeam = useMutation(api.teams.renameTeam);
   const deleteTeam = useMutation(api.teams.deleteTeam);
@@ -48,10 +50,10 @@ export default function AdminTeamsPage() {
   }
 
   async function handleCreate() {
-    if (!name.trim()) return;
+    if (!name.trim() || !activeOrgId) return;
     setSubmitting(true);
     try {
-      await createTeam({ name: name.trim() });
+      await createTeam({ orgId: activeOrgId, name: name.trim() });
       setCreateOpen(false);
       setName("");
     } finally {

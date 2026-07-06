@@ -16,11 +16,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
+import { useActiveOrg } from "@/components/active-org-provider";
 
 type GameRow = Doc<"games"> & { homeTeamName: string; awayTeamName: string; fieldName: string };
 
 function PayoutAccountCard() {
-  const account = useQuery(api.financials.getMyPayoutAccount);
+  const { activeOrgId } = useActiveOrg();
+  const account = useQuery(api.financials.getMyPayoutAccount, activeOrgId ? { orgId: activeOrgId } : "skip");
   const startOnboarding = useAction(api.financialsActions.startOnboarding);
   const refreshMyPayoutStatus = useAction(api.financialsActions.refreshMyPayoutStatus);
   const createExpressDashboardLink = useAction(api.financialsActions.createExpressDashboardLink);
@@ -28,8 +30,8 @@ function PayoutAccountCard() {
   const [openingDashboard, setOpeningDashboard] = useState(false);
 
   useEffect(() => {
-    if (account?.stripeConnectId) {
-      refreshMyPayoutStatus();
+    if (account?.stripeConnectId && activeOrgId) {
+      refreshMyPayoutStatus({ orgId: activeOrgId });
     }
     // Only refresh once per mount (e.g. right after returning from Stripe onboarding).
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -38,9 +40,10 @@ function PayoutAccountCard() {
   if (account === undefined) return null;
 
   async function handleConnect() {
+    if (!activeOrgId) return;
     setConnecting(true);
     try {
-      const { url } = await startOnboarding({ returnUrl: `${window.location.origin}/referee` });
+      const { url } = await startOnboarding({ orgId: activeOrgId, returnUrl: `${window.location.origin}/referee` });
       window.location.href = url;
     } finally {
       setConnecting(false);
@@ -48,9 +51,10 @@ function PayoutAccountCard() {
   }
 
   async function handleOpenDashboard() {
+    if (!activeOrgId) return;
     setOpeningDashboard(true);
     try {
-      const { url } = await createExpressDashboardLink();
+      const { url } = await createExpressDashboardLink({ orgId: activeOrgId });
       window.open(url, "_blank", "noopener,noreferrer");
     } finally {
       setOpeningDashboard(false);
@@ -95,7 +99,8 @@ function PayoutAccountCard() {
 type PayoutHistoryRow = Doc<"payoutLedger"> & { gameMatchup: string; gameStartTime?: number };
 
 function PayoutHistoryCard() {
-  const history = useQuery(api.financials.getMyPayoutHistory);
+  const { activeOrgId } = useActiveOrg();
+  const history = useQuery(api.financials.getMyPayoutHistory, activeOrgId ? { orgId: activeOrgId } : "skip");
 
   if (!history || history.length === 0) return null;
 
@@ -131,7 +136,8 @@ function PayoutHistoryCard() {
 }
 
 export default function RefereeDashboardPage() {
-  const games = useQuery(api.games.listMyAssignedGames);
+  const { activeOrgId } = useActiveOrg();
+  const games = useQuery(api.games.listMyAssignedGames, activeOrgId ? { orgId: activeOrgId } : "skip");
   const acceptGame = useMutation(api.games.acceptGame);
   const submitScore = useMutation(api.games.submitScore);
   const [acceptingId, setAcceptingId] = useState<Id<"games"> | null>(null);

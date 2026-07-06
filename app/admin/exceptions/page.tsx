@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import type { Doc } from "../../../convex/_generated/dataModel";
+import { useActiveOrg } from "@/components/active-org-provider";
 
 type DisputeRow = Doc<"disputes"> & {
   gameMatchup: string;
@@ -26,7 +27,8 @@ type DisputeRow = Doc<"disputes"> & {
 };
 
 export default function AdminExceptionsPage() {
-  const disputes = useQuery(api.disputes.listOpenDisputes);
+  const { activeOrgId } = useActiveOrg();
+  const disputes = useQuery(api.disputes.listOpenDisputes, activeOrgId ? { orgId: activeOrgId } : "skip");
   const resolveDispute = useMutation(api.disputes.resolveDispute);
 
   const [resolvingDispute, setResolvingDispute] = useState<DisputeRow | null>(null);

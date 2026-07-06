@@ -4,11 +4,16 @@ import { useQuery } from "convex/react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { api } from "../convex/_generated/api";
+import { useActiveOrg } from "./active-org-provider";
 
 const EXEMPT_PATHS = ["/acknowledge", "/sign-in", "/sign-up"];
 
 export function AcknowledgeGate() {
-  const required = useQuery(api.documents.getMyRequiredDocuments);
+  const { activeOrgId } = useActiveOrg();
+  const required = useQuery(
+    api.documents.getMyRequiredDocuments,
+    activeOrgId ? { orgId: activeOrgId } : "skip"
+  );
   const pathname = usePathname();
   const router = useRouter();
 

@@ -18,6 +18,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
+import { useActiveOrg } from "@/components/active-org-provider";
 
 type GameStatus = Doc<"games">["status"];
 type GameRow = Doc<"games"> & {
@@ -46,9 +47,10 @@ function toDatetimeLocalValue(ms: number): string {
 }
 
 export default function AdminSchedulePage() {
-  const games = useQuery(api.games.listGames, {});
-  const teams = useQuery(api.teams.listTeams);
-  const fields = useQuery(api.fields.listFields);
+  const { activeOrgId } = useActiveOrg();
+  const games = useQuery(api.games.listGames, activeOrgId ? { orgId: activeOrgId } : "skip");
+  const teams = useQuery(api.teams.listTeams, activeOrgId ? { orgId: activeOrgId } : "skip");
+  const fields = useQuery(api.fields.listFields, activeOrgId ? { orgId: activeOrgId } : "skip");
 
   const createGame = useMutation(api.games.createGame);
   const updateGameSlot = useMutation(api.games.updateGameSlot);
@@ -78,7 +80,7 @@ export default function AdminSchedulePage() {
 
   const availableRefs = useQuery(
     api.referees.getAvailableRefs,
-    assigningGame ? { gameId: assigningGame._id } : "skip"
+    assigningGame && activeOrgId ? { orgId: activeOrgId, gameId: assigningGame._id } : "skip"
   );
 
   if (games === undefined || teams === undefined || fields === undefined) {
@@ -98,7 +100,7 @@ export default function AdminSchedulePage() {
   }
 
   async function handleCreate() {
-    if (!homeTeamId || !awayTeamId || !fieldId || !startTime) return;
+    if (!homeTeamId || !awayTeamId || !fieldId || !startTime || !activeOrgId) return;
     if (homeTeamId === awayTeamId) {
       setError("Home and away team must be different");
       return;
@@ -107,6 +109,7 @@ export default function AdminSchedulePage() {
     setError(null);
     try {
       await createGame({
+        orgId: activeOrgId,
         homeTeamId: homeTeamId as Id<"teams">,
         awayTeamId: awayTeamId as Id<"teams">,
         fieldId: fieldId as Id<"fields">,

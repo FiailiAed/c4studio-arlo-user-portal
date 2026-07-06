@@ -19,6 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
+import { useActiveOrg } from "@/components/active-org-provider";
 
 type ClubRow = Doc<"clubs"> & { coachName?: string };
 
@@ -26,8 +27,9 @@ const SELECT_CLASSNAME =
   "rounded-md border border-input bg-background px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring/50";
 
 export default function AdminClubsPage() {
-  const clubs = useQuery(api.clubs.listClubs);
-  const coaches = useQuery(api.clubs.listCoaches);
+  const { activeOrgId } = useActiveOrg();
+  const clubs = useQuery(api.clubs.listClubs, activeOrgId ? { orgId: activeOrgId } : "skip");
+  const coaches = useQuery(api.clubs.listCoaches, activeOrgId ? { orgId: activeOrgId } : "skip");
   const createClub = useMutation(api.clubs.createClub);
   const renameClub = useMutation(api.clubs.renameClub);
   const assignCoach = useMutation(api.clubs.assignCoach);
@@ -56,10 +58,10 @@ export default function AdminClubsPage() {
   }
 
   async function handleCreate() {
-    if (!name.trim()) return;
+    if (!name.trim() || !activeOrgId) return;
     setSubmitting(true);
     try {
-      await createClub({ name: name.trim() });
+      await createClub({ orgId: activeOrgId, name: name.trim() });
       setCreateOpen(false);
       setName("");
     } finally {

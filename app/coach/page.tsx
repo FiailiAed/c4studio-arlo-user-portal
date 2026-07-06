@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
+import { useActiveOrg } from "@/components/active-org-provider";
 
 type RosterRow = Doc<"rosters"> & { player: Doc<"players">; teamName: string };
 type ScheduleRow = Doc<"games"> & {
@@ -27,9 +28,10 @@ type ScheduleRow = Doc<"games"> & {
 };
 
 export default function CoachDashboardPage() {
-  const club = useQuery(api.coach.getMyClub);
-  const roster = useQuery(api.coach.getMyRoster);
-  const schedule = useQuery(api.coach.getMySchedule);
+  const { activeOrgId } = useActiveOrg();
+  const club = useQuery(api.coach.getMyClub, activeOrgId ? { orgId: activeOrgId } : "skip");
+  const roster = useQuery(api.coach.getMyRoster, activeOrgId ? { orgId: activeOrgId } : "skip");
+  const schedule = useQuery(api.coach.getMySchedule, activeOrgId ? { orgId: activeOrgId } : "skip");
   const verifyScore = useMutation(api.coach.verifyScore);
   const flagDispute = useMutation(api.coach.flagDispute);
   const [verifyingId, setVerifyingId] = useState<Id<"games"> | null>(null);
@@ -58,9 +60,10 @@ export default function CoachDashboardPage() {
   }
 
   async function handleVerify(gameId: Id<"games">) {
+    if (!activeOrgId) return;
     setVerifyingId(gameId);
     try {
-      await verifyScore({ gameId });
+      await verifyScore({ orgId: activeOrgId, gameId });
     } finally {
       setVerifyingId(null);
     }
@@ -73,11 +76,11 @@ export default function CoachDashboardPage() {
   }
 
   async function handleDispute() {
-    if (!disputingGame || !disputeReason.trim()) return;
+    if (!disputingGame || !disputeReason.trim() || !activeOrgId) return;
     setDisputeSubmitting(true);
     setDisputeError(null);
     try {
-      await flagDispute({ gameId: disputingGame._id, reason: disputeReason.trim() });
+      await flagDispute({ orgId: activeOrgId, gameId: disputingGame._id, reason: disputeReason.trim() });
       setDisputingGame(null);
     } catch (e) {
       setDisputeError(e instanceof Error ? e.message : "Failed to submit dispute");

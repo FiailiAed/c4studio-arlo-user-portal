@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
+import { useActiveOrg } from "@/components/active-org-provider";
 
 type RosterRow = Doc<"rosters"> & { player: Doc<"players"> };
 
@@ -24,8 +25,12 @@ function playerLabel(player: Doc<"players">) {
 }
 
 function TeamRosterSection({ team }: { team: Doc<"teams"> }) {
+  const { activeOrgId } = useActiveOrg();
   const roster = useQuery(api.rosters.listRosterForTeam, { teamId: team._id });
-  const allPlayers = useQuery(api.players.listAllPlayers);
+  const allPlayers = useQuery(
+    api.players.listAllPlayers,
+    activeOrgId ? { orgId: activeOrgId } : "skip"
+  );
   const addToRoster = useMutation(api.rosters.addToRoster);
   const removeFromRoster = useMutation(api.rosters.removeFromRoster);
 
@@ -129,8 +134,12 @@ export default function AdminClubRosterPage({
 }) {
   const { clubId } = use(params);
   const id = clubId as Id<"clubs">;
+  const { activeOrgId } = useActiveOrg();
 
-  const result = useQuery(api.clubs.getClub, { clubId: id });
+  const result = useQuery(
+    api.clubs.getClub,
+    activeOrgId ? { orgId: activeOrgId, clubId: id } : "skip"
+  );
 
   if (result === undefined) {
     return (
