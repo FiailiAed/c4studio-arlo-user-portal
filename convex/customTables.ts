@@ -21,27 +21,30 @@ function generateColumnKey(index: number): string {
 }
 
 export const listTables = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await requireLeagueAdminQuery(ctx);
+  args: { orgId: v.id("organizations") },
+  handler: async (ctx, args) => {
+    const identity = await requireLeagueAdminQuery(ctx, args.orgId);
     if (!identity) return null;
 
-    return await ctx.db.query("tableDefinitions").collect();
+    return await ctx.db
+      .query("tableDefinitions")
+      .withIndex("by_org", (q) => q.eq("orgId", args.orgId))
+      .collect();
   },
 });
 
 export const getTable = query({
-  args: { tableId: v.id("tableDefinitions") },
+  args: { orgId: v.id("organizations"), tableId: v.id("tableDefinitions") },
   handler: async (ctx, args) => {
-    const identity = await requireLeagueAdminQuery(ctx);
+    const identity = await requireLeagueAdminQuery(ctx, args.orgId);
     if (!identity) return null;
 
     const table = await ctx.db.get(args.tableId);
-    if (!table) return null;
+    if (!table || table.orgId !== args.orgId) return null;
 
     const records = await ctx.db
       .query("customRecords")
-      .withIndex("by_table", (q) => q.eq("tableId", args.tableId))
+      .withIndex("by_org_and_table", (q) => q.eq("orgId", args.orgId).eq("tableId", args.tableId))
       .collect();
 
     return { table, records };
@@ -50,11 +53,12 @@ export const getTable = query({
 
 export const createTable = mutation({
   args: {
+    orgId: v.id("organizations"),
     name: v.string(),
     columns: v.array(columnInput),
   },
   handler: async (ctx, args) => {
-    const identity = await requireLeagueAdminMutation(ctx);
+    const identity = await requireLeagueAdminMutation(ctx, args.orgId);
 
     const columns = args.columns.map((col, i) => ({
       key: generateColumnKey(i),
@@ -64,6 +68,7 @@ export const createTable = mutation({
     }));
 
     return await ctx.db.insert("tableDefinitions", {
+      orgId: args.orgId,
       name: args.name,
       createdBy: identity.subject,
       columns,
@@ -79,10 +84,10 @@ export const addColumn = mutation({
     options: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
-    await requireLeagueAdminMutation(ctx);
-
     const table = await ctx.db.get(args.tableId);
     if (!table) throw new Error("Table not found");
+
+    await requireLeagueAdminMutation(ctx, table.orgId);
 
     const newColumn = {
       key: generateColumnKey(table.columns.length),
@@ -104,10 +109,10 @@ export const renameColumn = mutation({
     label: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireLeagueAdminMutation(ctx);
-
     const table = await ctx.db.get(args.tableId);
     if (!table) throw new Error("Table not found");
+
+    await requireLeagueAdminMutation(ctx, table.orgId);
 
     const columns = table.columns.map((col) =>
       col.key === args.key ? { ...col, label: args.label } : col
@@ -123,10 +128,10 @@ export const deleteColumn = mutation({
     key: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireLeagueAdminMutation(ctx);
-
     const table = await ctx.db.get(args.tableId);
     if (!table) throw new Error("Table not found");
+
+    await requireLeagueAdminMutation(ctx, table.orgId);
 
     // Intentionally do not cascade-clean customRecords.data: orphaned
     // key/value pairs are inert and cheap to leave behind, and scrubbing
@@ -140,11 +145,14 @@ export const deleteColumn = mutation({
 export const deleteTable = mutation({
   args: { tableId: v.id("tableDefinitions") },
   handler: async (ctx, args) => {
-    await requireLeagueAdminMutation(ctx);
+    const table = await ctx.db.get(args.tableId);
+    if (!table) throw new Error("Table not found");
+
+    await requireLeagueAdminMutation(ctx, table.orgId);
 
     const records = await ctx.db
       .query("customRecords")
-      .withIndex("by_table", (q) => q.eq("tableId", args.tableId))
+      .withIndex("by_org_and_table", (q) => q.eq("orgId", table.orgId).eq("tableId", args.tableId))
       .collect();
 
     for (const record of records) {
@@ -161,9 +169,13 @@ export const addRecord = mutation({
     data: v.record(v.string(), v.any()),
   },
   handler: async (ctx, args) => {
-    await requireLeagueAdminMutation(ctx);
+    const table = await ctx.db.get(args.tableId);
+    if (!table) throw new Error("Table not found");
+
+    await requireLeagueAdminMutation(ctx, table.orgId);
 
     return await ctx.db.insert("customRecords", {
+      orgId: table.orgId,
       tableId: args.tableId,
       data: args.data,
     });
@@ -176,7 +188,10 @@ export const updateRecord = mutation({
     data: v.record(v.string(), v.any()),
   },
   handler: async (ctx, args) => {
-    await requireLeagueAdminMutation(ctx);
+    const record = await ctx.db.get(args.recordId);
+    if (!record) throw new Error("Record not found");
+
+    await requireLeagueAdminMutation(ctx, record.orgId);
 
     await ctx.db.patch(args.recordId, { data: args.data });
   },
@@ -185,7 +200,10 @@ export const updateRecord = mutation({
 export const deleteRecord = mutation({
   args: { recordId: v.id("customRecords") },
   handler: async (ctx, args) => {
-    await requireLeagueAdminMutation(ctx);
+    const record = await ctx.db.get(args.recordId);
+    if (!record) throw new Error("Record not found");
+
+    await requireLeagueAdminMutation(ctx, record.orgId);
 
     await ctx.db.delete(args.recordId);
   },

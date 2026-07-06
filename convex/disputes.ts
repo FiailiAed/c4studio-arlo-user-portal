@@ -3,14 +3,14 @@ import { v } from "convex/values";
 import { requireLeagueAdminMutation, requireLeagueAdminQuery } from "./lib/auth";
 
 export const listOpenDisputes = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await requireLeagueAdminQuery(ctx);
+  args: { orgId: v.id("organizations") },
+  handler: async (ctx, args) => {
+    const identity = await requireLeagueAdminQuery(ctx, args.orgId);
     if (!identity) return null;
 
     const openDisputes = await ctx.db
       .query("disputes")
-      .withIndex("by_status", (q) => q.eq("status", "OPEN"))
+      .withIndex("by_org_and_status", (q) => q.eq("orgId", args.orgId).eq("status", "OPEN"))
       .collect();
 
     const results = [];
@@ -49,11 +49,11 @@ export const resolveDispute = mutation({
     awayScore: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const identity = await requireLeagueAdminMutation(ctx);
-
     const dispute = await ctx.db.get(args.disputeId);
     if (!dispute) throw new Error("Dispute not found");
     if (dispute.status !== "OPEN") throw new Error("Dispute is already resolved");
+
+    const identity = await requireLeagueAdminMutation(ctx, dispute.orgId);
 
     const game = await ctx.db.get(dispute.gameId);
     if (!game) throw new Error("Game not found");

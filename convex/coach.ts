@@ -3,11 +3,20 @@ import { v } from "convex/values";
 import { requireCoachMutation, requireCoachQuery } from "./lib/auth";
 import type { Doc, Id } from "./_generated/dataModel";
 
-async function getMyTeams(ctx: QueryCtx, coachClerkId: string): Promise<Doc<"teams">[]> {
-  const club = await ctx.db
+async function getMyClubInOrg(
+  ctx: QueryCtx,
+  orgId: Id<"organizations">,
+  coachClerkId: string
+): Promise<Doc<"clubs"> | null> {
+  const clubs = await ctx.db
     .query("clubs")
     .withIndex("by_coach", (q) => q.eq("coachClerkId", coachClerkId))
-    .unique();
+    .collect();
+  return clubs.find((c) => c.orgId === orgId) ?? null;
+}
+
+async function getMyTeams(ctx: QueryCtx, orgId: Id<"organizations">, coachClerkId: string): Promise<Doc<"teams">[]> {
+  const club = await getMyClubInOrg(ctx, orgId, coachClerkId);
   if (!club) return [];
 
   return await ctx.db
@@ -17,15 +26,12 @@ async function getMyTeams(ctx: QueryCtx, coachClerkId: string): Promise<Doc<"tea
 }
 
 export const getMyClub = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await requireCoachQuery(ctx);
+  args: { orgId: v.id("organizations") },
+  handler: async (ctx, args) => {
+    const identity = await requireCoachQuery(ctx, args.orgId);
     if (!identity) return null;
 
-    const club = await ctx.db
-      .query("clubs")
-      .withIndex("by_coach", (q) => q.eq("coachClerkId", identity.subject))
-      .unique();
+    const club = await getMyClubInOrg(ctx, args.orgId, identity.subject);
     if (!club) return null;
 
     const teams = await ctx.db
@@ -38,18 +44,18 @@ export const getMyClub = query({
 });
 
 export const getMyRoster = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await requireCoachQuery(ctx);
+  args: { orgId: v.id("organizations") },
+  handler: async (ctx, args) => {
+    const identity = await requireCoachQuery(ctx, args.orgId);
     if (!identity) return null;
 
-    const teams = await getMyTeams(ctx, identity.subject);
+    const teams = await getMyTeams(ctx, args.orgId, identity.subject);
 
     const results = [];
     for (const team of teams) {
       const rosterRows = await ctx.db
         .query("rosters")
-        .withIndex("by_team", (q) => q.eq("teamId", team._id))
+        .withIndex("by_org_and_team", (q) => q.eq("orgId", args.orgId).eq("teamId", team._id))
         .collect();
       for (const row of rosterRows) {
         const player = await ctx.db.get(row.playerId);
@@ -62,15 +68,18 @@ export const getMyRoster = query({
 });
 
 export const getMySchedule = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await requireCoachQuery(ctx);
+  args: { orgId: v.id("organizations") },
+  handler: async (ctx, args) => {
+    const identity = await requireCoachQuery(ctx, args.orgId);
     if (!identity) return null;
 
-    const teams = await getMyTeams(ctx, identity.subject);
+    const teams = await getMyTeams(ctx, args.orgId, identity.subject);
     const teamIds = new Set(teams.map((t) => t._id));
 
-    const allGames = await ctx.db.query("games").withIndex("by_start_time", (q) => q).collect();
+    const allGames = await ctx.db
+      .query("games")
+      .withIndex("by_org_and_start_time", (q) => q.eq("orgId", args.orgId))
+      .collect();
     const myGames = allGames.filter(
       (game) => teamIds.has(game.homeTeamId) || teamIds.has(game.awayTeamId)
     );
@@ -101,14 +110,14 @@ export const getMySchedule = query({
 });
 
 export const verifyScore = mutation({
-  args: { gameId: v.id("games") },
+  args: { orgId: v.id("organizations"), gameId: v.id("games") },
   handler: async (ctx, args) => {
-    const identity = await requireCoachMutation(ctx);
+    const identity = await requireCoachMutation(ctx, args.orgId);
 
     const game = await ctx.db.get(args.gameId);
-    if (!game) throw new Error("Game not found");
+    if (!game || game.orgId !== args.orgId) throw new Error("Game not found");
 
-    const teams = await getMyTeams(ctx, identity.subject);
+    const teams = await getMyTeams(ctx, args.orgId, identity.subject);
     const teamIds = new Set<Id<"teams">>(teams.map((t) => t._id));
     if (!teamIds.has(game.homeTeamId) && !teamIds.has(game.awayTeamId)) {
       throw new Error("Forbidden");
@@ -121,16 +130,17 @@ export const verifyScore = mutation({
 
 export const flagDispute = mutation({
   args: {
+    orgId: v.id("organizations"),
     gameId: v.id("games"),
     reason: v.string(),
   },
   handler: async (ctx, args) => {
-    const identity = await requireCoachMutation(ctx);
+    const identity = await requireCoachMutation(ctx, args.orgId);
 
     const game = await ctx.db.get(args.gameId);
-    if (!game) throw new Error("Game not found");
+    if (!game || game.orgId !== args.orgId) throw new Error("Game not found");
 
-    const teams = await getMyTeams(ctx, identity.subject);
+    const teams = await getMyTeams(ctx, args.orgId, identity.subject);
     const teamIds = new Set<Id<"teams">>(teams.map((t) => t._id));
     if (!teamIds.has(game.homeTeamId) && !teamIds.has(game.awayTeamId)) {
       throw new Error("Forbidden");
@@ -138,6 +148,7 @@ export const flagDispute = mutation({
     if (game.status !== "COMPLETED_WITH_SCORE") throw new Error("Game does not have a score to dispute");
 
     await ctx.db.insert("disputes", {
+      orgId: game.orgId,
       gameId: args.gameId,
       raisedByClerkId: identity.subject,
       reason: args.reason,

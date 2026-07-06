@@ -3,18 +3,21 @@ import { v } from "convex/values";
 import { requireLeagueAdminQuery } from "./lib/auth";
 
 export const listAllPlayers = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await requireLeagueAdminQuery(ctx);
+  args: { orgId: v.id("organizations") },
+  handler: async (ctx, args) => {
+    const identity = await requireLeagueAdminQuery(ctx, args.orgId);
     if (!identity) return null;
 
-    return await ctx.db.query("players").collect();
+    return await ctx.db
+      .query("players")
+      .withIndex("by_org", (q) => q.eq("orgId", args.orgId))
+      .collect();
   },
 });
 
 export const listMyPlayers = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { orgId: v.id("organizations") },
+  handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     // Return null rather than throw — Convex re-runs the query once the auth
     // token arrives. Throwing leaves useQuery permanently errored on fast loads.
@@ -22,13 +25,14 @@ export const listMyPlayers = query({
 
     return await ctx.db
       .query("players")
-      .withIndex("by_guardian", (q) => q.eq("guardianClerkId", identity.subject))
+      .withIndex("by_org_and_guardian", (q) => q.eq("orgId", args.orgId).eq("guardianClerkId", identity.subject))
       .collect();
   },
 });
 
 export const createPlayer = mutation({
   args: {
+    orgId: v.id("organizations"),
     firstName: v.string(),
     lastName: v.string(),
     dateOfBirth: v.string(),

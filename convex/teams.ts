@@ -3,24 +3,33 @@ import { v } from "convex/values";
 import { requireLeagueAdminMutation, requireLeagueAdminQuery } from "./lib/auth";
 
 export const listTeams = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await requireLeagueAdminQuery(ctx);
+  args: { orgId: v.id("organizations") },
+  handler: async (ctx, args) => {
+    const identity = await requireLeagueAdminQuery(ctx, args.orgId);
     if (!identity) return null;
 
-    return await ctx.db.query("teams").collect();
+    return await ctx.db
+      .query("teams")
+      .withIndex("by_org", (q) => q.eq("orgId", args.orgId))
+      .collect();
   },
 });
 
 export const createTeam = mutation({
   args: {
+    orgId: v.id("organizations"),
     name: v.string(),
     clubId: v.optional(v.id("clubs")),
   },
   handler: async (ctx, args) => {
-    await requireLeagueAdminMutation(ctx);
+    await requireLeagueAdminMutation(ctx, args.orgId);
 
-    return await ctx.db.insert("teams", { name: args.name, clubId: args.clubId });
+    if (args.clubId) {
+      const club = await ctx.db.get(args.clubId);
+      if (!club || club.orgId !== args.orgId) throw new Error("Club not found");
+    }
+
+    return await ctx.db.insert("teams", { orgId: args.orgId, name: args.name, clubId: args.clubId });
   },
 });
 
@@ -30,10 +39,15 @@ export const assignTeamToClub = mutation({
     clubId: v.optional(v.id("clubs")),
   },
   handler: async (ctx, args) => {
-    await requireLeagueAdminMutation(ctx);
-
     const team = await ctx.db.get(args.teamId);
     if (!team) throw new Error("Team not found");
+
+    await requireLeagueAdminMutation(ctx, team.orgId);
+
+    if (args.clubId) {
+      const club = await ctx.db.get(args.clubId);
+      if (!club || club.orgId !== team.orgId) throw new Error("Club not found");
+    }
 
     await ctx.db.patch(args.teamId, { clubId: args.clubId });
   },
@@ -45,10 +59,10 @@ export const renameTeam = mutation({
     name: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireLeagueAdminMutation(ctx);
-
     const team = await ctx.db.get(args.teamId);
     if (!team) throw new Error("Team not found");
+
+    await requireLeagueAdminMutation(ctx, team.orgId);
 
     await ctx.db.patch(args.teamId, { name: args.name });
   },
@@ -57,9 +71,15 @@ export const renameTeam = mutation({
 export const deleteTeam = mutation({
   args: { teamId: v.id("teams") },
   handler: async (ctx, args) => {
-    await requireLeagueAdminMutation(ctx);
+    const team = await ctx.db.get(args.teamId);
+    if (!team) throw new Error("Team not found");
 
-    const games = await ctx.db.query("games").collect();
+    await requireLeagueAdminMutation(ctx, team.orgId);
+
+    const games = await ctx.db
+      .query("games")
+      .withIndex("by_org_and_start_time", (q) => q.eq("orgId", team.orgId))
+      .collect();
     const referenced = games.some(
       (game) => game.homeTeamId === args.teamId || game.awayTeamId === args.teamId
     );

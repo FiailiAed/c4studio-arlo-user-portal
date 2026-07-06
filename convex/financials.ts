@@ -7,41 +7,62 @@ const DEFAULT_REFEREE_PAY_RATE_CENTS = 5000; // $50/game
 const PLATFORM_FEE_RATE = 0.015;
 
 export const getLeagueSettings = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await requireLeagueAdminQuery(ctx);
+  args: { orgId: v.id("organizations") },
+  handler: async (ctx, args) => {
+    const identity = await requireLeagueAdminQuery(ctx, args.orgId);
     if (!identity) return null;
 
-    const settings = await ctx.db.query("leagueSettings").first();
+    const settings = await ctx.db
+      .query("leagueSettings")
+      .withIndex("by_org", (q) => q.eq("orgId", args.orgId))
+      .first();
     return settings ?? { refereePayRateCents: DEFAULT_REFEREE_PAY_RATE_CENTS };
   },
 });
 
 export const updateLeagueSettings = mutation({
-  args: { refereePayRateCents: v.number() },
+  args: { orgId: v.id("organizations"), refereePayRateCents: v.number() },
   handler: async (ctx, args) => {
-    await requireLeagueAdminMutation(ctx);
+    await requireLeagueAdminMutation(ctx, args.orgId);
 
-    const existing = await ctx.db.query("leagueSettings").first();
+    const existing = await ctx.db
+      .query("leagueSettings")
+      .withIndex("by_org", (q) => q.eq("orgId", args.orgId))
+      .first();
     if (existing) {
       await ctx.db.patch(existing._id, { refereePayRateCents: args.refereePayRateCents });
     } else {
-      await ctx.db.insert("leagueSettings", { refereePayRateCents: args.refereePayRateCents });
+      await ctx.db.insert("leagueSettings", { orgId: args.orgId, refereePayRateCents: args.refereePayRateCents });
     }
   },
 });
 
 export const listReferees = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await requireLeagueAdminQuery(ctx);
+  args: { orgId: v.id("organizations") },
+  handler: async (ctx, args) => {
+    const identity = await requireLeagueAdminQuery(ctx, args.orgId);
     if (!identity) return null;
 
-    const users = await ctx.db.query("users").collect();
-    const referees = users.filter((u) => u.roles?.includes("referee"));
+    const memberships = await ctx.db
+      .query("orgMemberships")
+      .withIndex("by_org", (q) => q.eq("orgId", args.orgId))
+      .filter((q) => q.eq(q.field("status"), "active"))
+      .collect();
+    const refereeMemberships = memberships.filter((m) => m.roles.includes("referee"));
+
+    const users = await Promise.all(
+      refereeMemberships.map((m) =>
+        ctx.db
+          .query("users")
+          .withIndex("by_clerk_id", (q) => q.eq("clerkId", m.clerkId))
+          .unique()
+      )
+    );
 
     const results = [];
-    for (const referee of referees) {
+    for (let i = 0; i < refereeMemberships.length; i++) {
+      const referee = users[i];
+      if (!referee) continue;
       const profile = await ctx.db
         .query("refereeProfiles")
         .withIndex("by_clerk_id", (q) => q.eq("clerkId", referee.clerkId))
@@ -58,11 +79,12 @@ export const listReferees = query({
 
 export const setRefereeStripeAccount = mutation({
   args: {
+    orgId: v.id("organizations"),
     refereeClerkId: v.string(),
     stripeConnectId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireLeagueAdminMutation(ctx);
+    await requireLeagueAdminMutation(ctx, args.orgId);
 
     const existing = await ctx.db
       .query("refereeProfiles")
@@ -81,12 +103,15 @@ export const setRefereeStripeAccount = mutation({
 });
 
 export const listPayoutLedger = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await requireLeagueAdminQuery(ctx);
+  args: { orgId: v.id("organizations") },
+  handler: async (ctx, args) => {
+    const identity = await requireLeagueAdminQuery(ctx, args.orgId);
     if (!identity) return null;
 
-    const entries = await ctx.db.query("payoutLedger").collect();
+    const entries = await ctx.db
+      .query("payoutLedger")
+      .withIndex("by_org", (q) => q.eq("orgId", args.orgId))
+      .collect();
     const results = [];
     for (const entry of entries) {
       const [game, referee] = await Promise.all([
@@ -113,14 +138,14 @@ export const listPayoutLedger = query({
 });
 
 export const getMyPayoutHistory = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await requireRefereeQuery(ctx);
+  args: { orgId: v.id("organizations") },
+  handler: async (ctx, args) => {
+    const identity = await requireRefereeQuery(ctx, args.orgId);
     if (!identity) return null;
 
     const entries = await ctx.db
       .query("payoutLedger")
-      .withIndex("by_referee", (q) => q.eq("refereeClerkId", identity.subject))
+      .withIndex("by_org_and_referee", (q) => q.eq("orgId", args.orgId).eq("refereeClerkId", identity.subject))
       .collect();
 
     const results = [];
@@ -142,10 +167,11 @@ export const getMyPayoutHistory = query({
 export const retryPayout = mutation({
   args: { payoutLedgerId: v.id("payoutLedger") },
   handler: async (ctx, args) => {
-    await requireLeagueAdminMutation(ctx);
-
     const entry = await ctx.db.get(args.payoutLedgerId);
     if (!entry) throw new Error("Payout entry not found");
+
+    await requireLeagueAdminMutation(ctx, entry.orgId);
+
     if (entry.status !== "FAILED") throw new Error("Only failed payouts can be retried");
 
     await ctx.db.delete(args.payoutLedgerId);
@@ -185,12 +211,16 @@ export const createPendingLedgerEntry = internalMutation({
     const game = await ctx.db.get(args.gameId);
     if (!game || !game.refereeId) return null;
 
-    const settings = await ctx.db.query("leagueSettings").first();
+    const settings = await ctx.db
+      .query("leagueSettings")
+      .withIndex("by_org", (q) => q.eq("orgId", game.orgId))
+      .first();
     const grossAmountCents = settings?.refereePayRateCents ?? DEFAULT_REFEREE_PAY_RATE_CENTS;
     const platformFeeCents = Math.round(grossAmountCents * PLATFORM_FEE_RATE);
     const netAmountCents = grossAmountCents - platformFeeCents;
 
     return await ctx.db.insert("payoutLedger", {
+      orgId: game.orgId,
       gameId: args.gameId,
       refereeClerkId: game.refereeId,
       grossAmountCents,
@@ -224,9 +254,9 @@ export const recordPayoutResult = internalMutation({
 });
 
 export const getMyPayoutAccount = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await requireRefereeQuery(ctx);
+  args: { orgId: v.id("organizations") },
+  handler: async (ctx, args) => {
+    const identity = await requireRefereeQuery(ctx, args.orgId);
     if (!identity) return null;
 
     const profile = await ctx.db
@@ -242,9 +272,9 @@ export const getMyPayoutAccount = query({
 });
 
 export const getMyRefereeContext = internalQuery({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await requireRefereeQuery(ctx);
+  args: { orgId: v.id("organizations") },
+  handler: async (ctx, args) => {
+    const identity = await requireRefereeQuery(ctx, args.orgId);
     if (!identity) return null;
 
     const [user, profile] = await Promise.all([
@@ -305,9 +335,9 @@ export const savePayoutAccount = internalMutation({
 });
 
 export const assertLeagueAdmin = internalQuery({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await requireLeagueAdminQuery(ctx);
+  args: { orgId: v.id("organizations") },
+  handler: async (ctx, args) => {
+    const identity = await requireLeagueAdminQuery(ctx, args.orgId);
     return identity ? { clerkId: identity.subject } : null;
   },
 });
