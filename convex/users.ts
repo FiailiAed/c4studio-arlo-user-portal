@@ -1,6 +1,5 @@
 import { internalMutation, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { requireLeagueAdminQuery } from "./lib/auth";
 
 export const getCurrentUser = query({
   args: {},
@@ -76,16 +75,6 @@ export const updateProfile = mutation({
   },
 });
 
-export const listAll = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await requireLeagueAdminQuery(ctx);
-    if (!identity) return null;
-
-    return await ctx.db.query("users").collect();
-  },
-});
-
 export const deleteByClerkId = internalMutation({
   args: { clerkId: v.string() },
   handler: async (ctx, { clerkId }) => {
@@ -103,7 +92,6 @@ export const syncFromWebhook = internalMutation({
     firstName: v.optional(v.string()),
     lastName: v.optional(v.string()),
     email: v.optional(v.string()),
-    roles: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db
@@ -115,7 +103,6 @@ export const syncFromWebhook = internalMutation({
       firstName: args.firstName,
       lastName: args.lastName,
       email: args.email,
-      roles: args.roles,
     };
 
     if (existing) {

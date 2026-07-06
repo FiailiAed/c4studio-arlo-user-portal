@@ -12,7 +12,6 @@ interface ClerkUserEvent {
     first_name?: string | null;
     last_name?: string | null;
     email_addresses?: { email_address: string }[];
-    public_metadata?: { roles?: string[] };
   };
 }
 
@@ -37,13 +36,12 @@ http.route({
     }
 
     if (event.type === "user.created" || event.type === "user.updated") {
-      const { id, first_name, last_name, email_addresses, public_metadata } = event.data;
+      const { id, first_name, last_name, email_addresses } = event.data;
       await ctx.runMutation(internal.users.syncFromWebhook, {
         clerkId: id,
         firstName: first_name ?? undefined,
         lastName: last_name ?? undefined,
         email: email_addresses?.[0]?.email_address,
-        roles: public_metadata?.roles,
       });
     } else if (event.type === "user.deleted") {
       await ctx.runMutation(internal.users.deleteByClerkId, { clerkId: event.data.id });
