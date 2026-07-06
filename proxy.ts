@@ -1,36 +1,28 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
-import { NextResponse } from "next/server";
-import { hasAnyRole } from "@/lib/roles";
 
 const isPublicRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"]);
-const isAdminRoute = createRouteMatcher(["/admin(.*)"]);
-const isRefereeRoute = createRouteMatcher(["/referee(.*)"]);
-const isCoachRoute = createRouteMatcher(["/coach(.*)"]);
 
+/**
+ * Authentication-only gating, deliberately.
+ *
+ * In the Clerk-organizations design this app used to have, a JWT session
+ * claim (`sessionClaims.metadata.roles`) carried the caller's role and this
+ * middleware could redirect `/admin`, `/referee`, `/coach` before a single
+ * Convex round-trip happened. That claim no longer exists: this branch moved
+ * all tenancy and roles into Convex (`orgMemberships`), and Clerk is used
+ * purely for authentication now. Middleware has no JWT claim left to read,
+ * so it can only assert "is this user signed in," never "is this user
+ * authorized for this org/role" — that check now happens exclusively at the
+ * Convex query/mutation layer (see convex/lib/auth.ts's requireLeagueAdmin
+ * / requireRefereeQuery / requireCoachQuery helpers), the same pattern this
+ * app already used for `/players`, which never had middleware role gating.
+ * Route-level UI still redirects unauthorized users away from admin/referee/
+ * coach pages once the relevant Convex query resolves — enforcement just
+ * lives one layer down from here.
+ */
 export default clerkMiddleware(async (auth, request) => {
   if (isPublicRoute(request)) return;
   await auth.protect();
-  if (isAdminRoute(request)) {
-    const { sessionClaims } = await auth();
-    const roles = (sessionClaims?.metadata as { roles?: string[] } | undefined)?.roles;
-    if (!hasAnyRole(roles, ["league_admin", "super_admin"])) {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
-    }
-  }
-  if (isRefereeRoute(request)) {
-    const { sessionClaims } = await auth();
-    const roles = (sessionClaims?.metadata as { roles?: string[] } | undefined)?.roles;
-    if (!hasAnyRole(roles, ["referee", "league_admin", "super_admin"])) {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
-    }
-  }
-  if (isCoachRoute(request)) {
-    const { sessionClaims } = await auth();
-    const roles = (sessionClaims?.metadata as { roles?: string[] } | undefined)?.roles;
-    if (!hasAnyRole(roles, ["coach", "league_admin", "super_admin"])) {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
-    }
-  }
 });
 
 export const config = {

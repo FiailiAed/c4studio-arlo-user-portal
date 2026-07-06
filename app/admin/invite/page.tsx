@@ -6,12 +6,36 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getRoleConfig, type AppRole } from "@/lib/roles";
+import { useActiveOrg } from "@/components/active-org-provider";
+import { ArloLoader } from "@/components/ui/arlo-loader";
 
 const ROLES: AppRole[] = ["family", "referee", "program_admin", "coach", "league_admin", "super_admin"];
 
 type Status = "idle" | "submitting" | "success" | "error";
 
 export default function InviteUsersPage() {
+  const { activeOrgId, memberships } = useActiveOrg();
+
+  if (memberships === undefined) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <ArloLoader />
+      </div>
+    );
+  }
+
+  if (!activeOrgId) {
+    return (
+      <main className="flex flex-1 flex-col items-center justify-center py-12 px-4">
+        <p className="text-sm text-muted-foreground">Select an organization above to invite users.</p>
+      </main>
+    );
+  }
+
+  return <InviteForm orgId={activeOrgId} />;
+}
+
+function InviteForm({ orgId }: { orgId: string }) {
   const [email, setEmail] = useState("");
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [status, setStatus] = useState<Status>("idle");
@@ -27,10 +51,10 @@ export default function InviteUsersPage() {
     e.preventDefault();
     setStatus("submitting");
 
-    const res = await fetch("/api/users/invite", {
+    const res = await fetch("/api/org/invite", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, roles }),
+      body: JSON.stringify({ orgId, email, roles }),
     });
 
     if (res.ok) {
@@ -45,7 +69,9 @@ export default function InviteUsersPage() {
     setErrorMessage(
       res.status === 409
         ? "This person already has a pending invitation or an account."
-        : "Failed to send invitation. Try again."
+        : res.status === 403
+          ? "You don't have permission to invite users to this organization."
+          : "Failed to send invitation. Try again."
     );
   };
 

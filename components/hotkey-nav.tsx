@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../convex/_generated/api";
 import { hasAnyRole } from "@/lib/roles";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useActiveOrg } from "@/components/active-org-provider";
 
 const CHORD_TIMEOUT_MS = 1000;
 
@@ -26,14 +27,14 @@ function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 export function HotkeyNav() {
-  const profile = useQuery(api.users.getCurrentUser);
+  const { activeOrgId } = useActiveOrg();
+  const roles = useQuery(api.orgMemberships.getMyRoles, activeOrgId ? { orgId: activeOrgId } : "skip");
   const router = useRouter();
   const awaitingSecondKey = useRef(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
 
-  const roles = profile?.roles ?? [];
-  const availableDestinations = DESTINATIONS.filter((d) => !d.allowed || hasAnyRole(roles, d.allowed));
+  const availableDestinations = DESTINATIONS.filter((d) => !d.allowed || hasAnyRole(roles ?? [], d.allowed));
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {

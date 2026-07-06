@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { useClerk, useUser } from "@clerk/nextjs";
 import { useMemo, useState } from "react";
 import Link from "next/link";
@@ -21,150 +21,123 @@ import {
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { getRoleConfig, hasAnyRole, type AppRole } from "@/lib/roles";
-import type { Doc } from "../../../convex/_generated/dataModel";
+import { useActiveOrg } from "@/components/active-org-provider";
+import type { Id } from "../../../convex/_generated/dataModel";
 
 const ROLES: AppRole[] = ["family", "referee", "program_admin", "coach", "league_admin", "super_admin"];
 
-type AdminUser = Doc<"users">;
+type Member = {
+  membershipId: Id<"orgMemberships">;
+  clerkId: string;
+  roles: string[];
+  user: { firstName?: string; lastName?: string; email?: string } | null;
+};
 
 export default function AdminUsersPage() {
+  const { activeOrgId, memberships } = useActiveOrg();
+
+  if (memberships === undefined) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <ArloLoader />
+      </div>
+    );
+  }
+
+  if (!activeOrgId) {
+    return (
+      <main className="flex flex-1 flex-col items-center justify-center py-12 px-4">
+        <p className="text-sm text-muted-foreground">Select an organization above to manage its users.</p>
+      </main>
+    );
+  }
+
+  return <UserManagement orgId={activeOrgId} />;
+}
+
+function UserManagement({ orgId }: { orgId: Id<"organizations"> }) {
   const { user: currentUser } = useUser();
   const clerk = useClerk();
-  const users = useQuery(api.users.listAll);
-  const myProfile = useQuery(api.users.getCurrentUser);
-  const myRoles = myProfile?.roles as AppRole[] | undefined;
+  const members = useQuery(api.orgMemberships.listMembers, { orgId });
+  const myRoles = useQuery(api.orgMemberships.getMyRoles, { orgId });
+  const updateRoles = useMutation(api.orgMemberships.updateRoles);
+  const removeMember = useMutation(api.orgMemberships.removeMember);
+
   const [optimisticRoles, setOptimisticRoles] = useState<Record<string, AppRole[]>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [bulkRoles, setBulkRoles] = useState<AppRole[]>([]);
-  const [bulkApplying, setBulkApplying] = useState(false);
   const [search, setSearch] = useState("");
-  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
-  const [pendingDelete, setPendingDelete] = useState<{ clerkId: string; label: string } | null>(null);
-  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
+  const [pendingRemove, setPendingRemove] = useState<{ membershipId: Id<"orgMemberships">; label: string } | null>(
+    null
+  );
+  const [removeSubmitting, setRemoveSubmitting] = useState(false);
   const [pendingImpersonate, setPendingImpersonate] = useState<{ clerkId: string; label: string } | null>(null);
   const [impersonateSubmitting, setImpersonateSubmitting] = useState(false);
 
-  const filteredUsers = useMemo(() => {
-    if (!users) return users;
+  const filteredMembers = useMemo(() => {
+    if (!members) return members;
     const query = search.trim().toLowerCase();
-    if (!query) return users;
-    return users.filter((user) => {
-      const haystack = [user.firstName, user.lastName, user.email].filter(Boolean).join(" ").toLowerCase();
+    if (!query) return members;
+    return members.filter((m) => {
+      const haystack = [m.user?.firstName, m.user?.lastName, m.user?.email].filter(Boolean).join(" ").toLowerCase();
       return haystack.includes(query);
     });
-  }, [users, search]);
+  }, [members, search]);
 
-  async function applyRoles(clerkIds: string[], roles: AppRole[]) {
-    setOptimisticRoles((prev) => {
-      const next = { ...prev };
-      for (const id of clerkIds) next[id] = roles;
-      return next;
-    });
+  async function applyRoles(membershipId: Id<"orgMemberships">, roles: AppRole[]) {
+    setOptimisticRoles((prev) => ({ ...prev, [membershipId]: roles }));
     setErrors((prev) => {
       const next = { ...prev };
-      for (const id of clerkIds) delete next[id];
+      delete next[membershipId];
       return next;
     });
 
-    const res = await fetch("/api/users/role", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userIds: clerkIds, roles }),
-    });
-
-    if (!res.ok) {
-      setErrors((prev) => {
-        const next = { ...prev };
-        for (const id of clerkIds) next[id] = "Failed to update role";
-        return next;
-      });
+    try {
+      await updateRoles({ membershipId, roles });
+    } catch (e) {
+      setErrors((prev) => ({
+        ...prev,
+        [membershipId]: e instanceof Error ? e.message : "Failed to update roles",
+      }));
       setOptimisticRoles((prev) => {
         const next = { ...prev };
-        for (const id of clerkIds) delete next[id];
+        delete next[membershipId];
         return next;
       });
     }
-
-    return res.ok;
   }
 
-  function handleRoleToggle(clerkId: string, currentRoles: AppRole[], role: AppRole, checked: boolean) {
+  function handleRoleToggle(membershipId: Id<"orgMemberships">, currentRoles: AppRole[], role: AppRole, checked: boolean) {
     const nextRoles = checked ? [...currentRoles, role] : currentRoles.filter((r) => r !== role);
-    applyRoles([clerkId], nextRoles);
+    applyRoles(membershipId, nextRoles);
   }
 
-  async function handleBulkApply() {
-    if (bulkRoles.length === 0 || selected.size === 0) return;
-    setBulkApplying(true);
-    const ok = await applyRoles(Array.from(selected), bulkRoles);
-    setBulkApplying(false);
-    if (ok) {
-      setSelected(new Set());
-      setBulkRoles([]);
-    }
+  function requestRemove(membershipId: Id<"orgMemberships">, label: string) {
+    setPendingRemove({ membershipId, label });
   }
 
-  function toggleBulkRole(role: AppRole, checked: boolean) {
-    setBulkRoles((prev) => (checked ? [...prev, role] : prev.filter((r) => r !== role)));
-  }
-
-  function toggleSelected(clerkId: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(clerkId)) next.delete(clerkId);
-      else next.add(clerkId);
-      return next;
-    });
-  }
-
-  function toggleSelectAll() {
-    if (!filteredUsers || filteredUsers.length === 0) return;
-    const visibleIds = filteredUsers.filter((u) => !deletingIds.has(u.clerkId)).map((u) => u.clerkId);
-    const allVisibleSelected = visibleIds.every((id) => selected.has(id));
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (allVisibleSelected) {
-        for (const id of visibleIds) next.delete(id);
-      } else {
-        for (const id of visibleIds) next.add(id);
-      }
-      return next;
-    });
-  }
-
-  function requestDelete(clerkId: string, label: string) {
-    setPendingDelete({ clerkId, label });
-  }
-
-  async function confirmDelete() {
-    if (!pendingDelete) return;
-    const { clerkId } = pendingDelete;
-    setDeleteSubmitting(true);
-    setDeletingIds((prev) => new Set(prev).add(clerkId));
+  async function confirmRemove() {
+    if (!pendingRemove) return;
+    const { membershipId } = pendingRemove;
+    setRemoveSubmitting(true);
     setErrors((prev) => {
       const next = { ...prev };
-      delete next[clerkId];
+      delete next[membershipId];
       return next;
     });
 
-    const res = await fetch("/api/users/delete", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: clerkId }),
-    });
-
-    if (!res.ok) {
-      setDeletingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(clerkId);
-        return next;
-      });
-      setErrors((prev) => ({ ...prev, [clerkId]: "Failed to delete user" }));
+    try {
+      await removeMember({ membershipId });
+      setRemovingIds((prev) => new Set(prev).add(membershipId));
+    } catch (e) {
+      setErrors((prev) => ({
+        ...prev,
+        [membershipId]: e instanceof Error ? e.message : "Failed to remove member",
+      }));
     }
 
-    setDeleteSubmitting(false);
-    setPendingDelete(null);
+    setRemoveSubmitting(false);
+    setPendingRemove(null);
   }
 
   function requestImpersonate(clerkId: string, label: string) {
@@ -202,7 +175,7 @@ export default function AdminUsersPage() {
     window.location.href = url;
   }
 
-  if (users === undefined || users === null || filteredUsers === undefined || filteredUsers === null) {
+  if (members === undefined || myRoles === undefined) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <ArloLoader />
@@ -210,29 +183,37 @@ export default function AdminUsersPage() {
     );
   }
 
-  const visibleUsers = filteredUsers.filter((u) => !deletingIds.has(u.clerkId));
+  if (members === null || myRoles === null) {
+    return (
+      <main className="flex flex-1 flex-col items-center justify-center py-12 px-4">
+        <p className="text-sm text-muted-foreground">You don&apos;t have access to this organization&apos;s users.</p>
+      </main>
+    );
+  }
 
-  const columns: DataTableColumn<AdminUser>[] = [
+  const visibleMembers = (filteredMembers ?? []).filter((m) => !removingIds.has(m.membershipId));
+
+  const columns: DataTableColumn<Member>[] = [
     {
       key: "firstName",
       header: "First Name",
-      render: (user) => user.firstName ?? <span className="text-muted-foreground">—</span>,
+      render: (m) => m.user?.firstName ?? <span className="text-muted-foreground">—</span>,
     },
     {
       key: "lastName",
       header: "Last Name",
-      render: (user) => user.lastName ?? <span className="text-muted-foreground">—</span>,
+      render: (m) => m.user?.lastName ?? <span className="text-muted-foreground">—</span>,
     },
     {
       key: "email",
       header: "Email",
-      render: (user) => user.email ?? <span className="text-muted-foreground">—</span>,
+      render: (m) => m.user?.email ?? <span className="text-muted-foreground">—</span>,
     },
     {
       key: "role",
       header: "Roles",
-      render: (user) => {
-        const displayRoles = (optimisticRoles[user.clerkId] ?? user.roles ?? []) as AppRole[];
+      render: (m) => {
+        const displayRoles = (optimisticRoles[m.membershipId] ?? m.roles ?? []) as AppRole[];
         return displayRoles.length === 0 ? (
           <Badge variant="outline" className="text-muted-foreground">None</Badge>
         ) : (
@@ -247,8 +228,8 @@ export default function AdminUsersPage() {
     {
       key: "changeRole",
       header: "Change Roles",
-      render: (user) => {
-        const displayRoles = (optimisticRoles[user.clerkId] ?? user.roles ?? []) as AppRole[];
+      render: (m) => {
+        const displayRoles = (optimisticRoles[m.membershipId] ?? m.roles ?? []) as AppRole[];
         return (
           <div className="space-y-1">
             <div className="flex flex-col gap-1">
@@ -257,15 +238,13 @@ export default function AdminUsersPage() {
                   <input
                     type="checkbox"
                     checked={displayRoles.includes(r)}
-                    onChange={(e) => handleRoleToggle(user.clerkId, displayRoles, r, e.target.checked)}
+                    onChange={(e) => handleRoleToggle(m.membershipId, displayRoles, r, e.target.checked)}
                   />
                   {getRoleConfig(r)?.label ?? r}
                 </label>
               ))}
             </div>
-            {errors[user.clerkId] && (
-              <p className="text-xs text-destructive">{errors[user.clerkId]}</p>
-            )}
+            {errors[m.membershipId] && <p className="text-xs text-destructive">{errors[m.membershipId]}</p>}
           </div>
         );
       },
@@ -291,61 +270,31 @@ export default function AdminUsersPage() {
           aria-label="Search users"
         />
 
-        {selected.size > 0 && (
-          <div className="flex flex-wrap items-center gap-3 rounded-md border bg-muted/50 px-4 py-3">
-            <span className="text-sm font-medium">{selected.size} selected</span>
-            <div className="flex flex-wrap gap-3">
-              {ROLES.map((r) => (
-                <label key={r} className="flex items-center gap-1.5 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={bulkRoles.includes(r)}
-                    onChange={(e) => toggleBulkRole(r, e.target.checked)}
-                  />
-                  {getRoleConfig(r)?.label ?? r}
-                </label>
-              ))}
-            </div>
-            <Button size="sm" disabled={bulkRoles.length === 0 || bulkApplying} onClick={handleBulkApply}>
-              {bulkApplying ? "Applying…" : "Apply to selected"}
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
-              Clear
-            </Button>
-          </div>
-        )}
-
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
-              All Users {search.trim() && `(${visibleUsers.length} of ${users.length})`}
+              Org Members {search.trim() && `(${visibleMembers.length} of ${members.length})`}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <DataTable
               columns={columns}
-              rows={visibleUsers}
-              getRowKey={(user) => user.clerkId}
-              emptyMessage={search.trim() ? "No users match your search." : "No users found."}
-              selection={{
-                isSelected: (user) => selected.has(user.clerkId),
-                onToggle: (user) => toggleSelected(user.clerkId),
-                isAllSelected: visibleUsers.length > 0 && visibleUsers.every((u) => selected.has(u.clerkId)),
-                onToggleAll: toggleSelectAll,
-              }}
-              renderActions={(user) => (
+              rows={visibleMembers}
+              getRowKey={(m) => m.membershipId}
+              emptyMessage={search.trim() ? "No members match your search." : "No members found."}
+              renderActions={(m) => (
                 <div className="flex gap-2">
                   {hasAnyRole(myRoles, ["super_admin"]) && (
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={user.clerkId === currentUser?.id}
+                      disabled={m.clerkId === currentUser?.id}
                       onClick={() =>
                         requestImpersonate(
-                          user.clerkId,
-                          [user.firstName, user.lastName].filter(Boolean).join(" ") ||
-                            user.email ||
-                            user.clerkId
+                          m.clerkId,
+                          [m.user?.firstName, m.user?.lastName].filter(Boolean).join(" ") ||
+                            m.user?.email ||
+                            m.clerkId
                         )
                       }
                     >
@@ -355,17 +304,17 @@ export default function AdminUsersPage() {
                   <Button
                     size="sm"
                     variant="destructive"
-                    disabled={user.clerkId === currentUser?.id}
+                    disabled={m.clerkId === currentUser?.id}
                     onClick={() =>
-                      requestDelete(
-                        user.clerkId,
-                        [user.firstName, user.lastName].filter(Boolean).join(" ") ||
-                          user.email ||
-                          user.clerkId
+                      requestRemove(
+                        m.membershipId,
+                        [m.user?.firstName, m.user?.lastName].filter(Boolean).join(" ") ||
+                          m.user?.email ||
+                          m.clerkId
                       )
                     }
                   >
-                    Delete
+                    Remove
                   </Button>
                 </div>
               )}
@@ -374,20 +323,20 @@ export default function AdminUsersPage() {
         </Card>
       </div>
 
-      <Dialog open={!!pendingDelete} onOpenChange={(open) => !open && setPendingDelete(null)}>
+      <Dialog open={!!pendingRemove} onOpenChange={(open) => !open && setPendingRemove(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete {pendingDelete?.label}?</DialogTitle>
+            <DialogTitle>Remove {pendingRemove?.label} from this organization?</DialogTitle>
             <DialogDescription>
-              This will permanently remove their account. This can&apos;t be undone.
+              They&apos;ll lose access to this organization&apos;s data. Their account itself is not deleted.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPendingDelete(null)} disabled={deleteSubmitting}>
+            <Button variant="outline" onClick={() => setPendingRemove(null)} disabled={removeSubmitting}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={confirmDelete} disabled={deleteSubmitting}>
-              {deleteSubmitting ? "Deleting…" : "Delete"}
+            <Button variant="destructive" onClick={confirmRemove} disabled={removeSubmitting}>
+              {removeSubmitting ? "Removing…" : "Remove"}
             </Button>
           </DialogFooter>
         </DialogContent>

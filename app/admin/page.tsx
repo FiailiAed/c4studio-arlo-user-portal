@@ -9,6 +9,8 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { getRoleConfig, type AppRole } from "@/lib/roles";
+import { useActiveOrg } from "@/components/active-org-provider";
+import type { Id } from "../../convex/_generated/dataModel";
 
 export default function AdminPage() {
   return (
@@ -36,6 +38,17 @@ export default function AdminPage() {
               <CardDescription>Send a role-scoped email invitation.</CardDescription>
             </div>
             <Link href="/admin/invite" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+              Open
+            </Link>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-base">Org Hierarchy</CardTitle>
+              <CardDescription>Build and edit your organization&apos;s program structure.</CardDescription>
+            </div>
+            <Link href="/admin/org-units" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
               Open
             </Link>
           </CardHeader>
@@ -116,9 +129,15 @@ function DisputeAlertCard() {
 }
 
 function AdminOverviewCard() {
-  const allUsers = useQuery(api.users.listAll);
+  const { activeOrgId } = useActiveOrg();
+  if (!activeOrgId) return null;
+  return <AdminOverviewCardForOrg orgId={activeOrgId} />;
+}
 
-  if (!allUsers) return null;
+function AdminOverviewCardForOrg({ orgId }: { orgId: Id<"organizations"> }) {
+  const members = useQuery(api.orgMemberships.listMembers, { orgId });
+
+  if (!members) return null;
 
   const counts: Record<AppRole, number> = {
     family: 0,
@@ -129,9 +148,9 @@ function AdminOverviewCard() {
     super_admin: 0,
   };
   let unassigned = 0;
-  for (const u of allUsers) {
-    if (u.roles && u.roles.length > 0) {
-      for (const r of u.roles) {
+  for (const m of members) {
+    if (m.roles && m.roles.length > 0) {
+      for (const r of m.roles) {
         if (r in counts) counts[r as AppRole]++;
       }
     } else {
@@ -144,7 +163,7 @@ function AdminOverviewCard() {
       <CardHeader>
         <CardTitle className="text-base">League Overview</CardTitle>
         <CardDescription>
-          {allUsers.length} total users · role counts may overlap since a user can hold multiple roles
+          {members.length} total members · role counts may overlap since a member can hold multiple roles
         </CardDescription>
       </CardHeader>
       <CardContent>

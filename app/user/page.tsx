@@ -12,12 +12,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { getRoleConfig, type AppRole } from "@/lib/roles";
+import { useActiveOrg } from "@/components/active-org-provider";
 
 export default function UserPage() {
   const { user: clerkUser } = useUser();
   const profile = useQuery(api.users.getCurrentUser);
+  const { activeOrgId, activeOrg, memberships } = useActiveOrg();
+  const orgRoles = useQuery(api.orgMemberships.getMyRoles, activeOrgId ? { orgId: activeOrgId } : "skip");
 
-  if (profile === undefined) {
+  if (profile === undefined || memberships === undefined) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <ArloLoader />
@@ -25,7 +28,7 @@ export default function UserPage() {
     );
   }
 
-  const roles = (profile?.roles as AppRole[] | undefined) ?? [];
+  const roles = (orgRoles as AppRole[] | undefined | null) ?? [];
 
   const initials = (
     (clerkUser?.firstName?.[0] ?? "") + (clerkUser?.lastName?.[0] ?? "")
@@ -100,6 +103,7 @@ export default function UserPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Permissions</CardTitle>
+            {activeOrg && <p className="text-sm text-muted-foreground">In {activeOrg.name}</p>}
           </CardHeader>
           <CardContent className="space-y-6 text-sm">
             {roles.length === 0 ? (

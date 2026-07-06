@@ -1,10 +1,14 @@
 import { ClerkProvider, Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Link from "next/link";
 import { ImpersonationBanner } from "@/components/impersonation-banner";
 import { DropdownPortalSelect } from "@/components/dropdown-portal-select";
 import { HotkeyNav } from "@/components/hotkey-nav";
 import { AcknowledgeGate } from "@/components/acknowledge-gate";
+import { ActiveOrgProvider } from "@/components/active-org-provider";
+import { AcceptPendingInvites } from "@/components/accept-pending-invites";
+import { OrgSwitcher } from "@/components/org-switcher";
 import { ConvexClientProvider } from "./ConvexClientProvider";
 import "./globals.css";
 
@@ -36,24 +40,28 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <ClerkProvider>
           <ConvexClientProvider>
-            <header className="flex items-center justify-between px-6 py-3 border-b border-zinc-200 dark:border-zinc-800">
-              <span className="font-semibold text-sm"><a href="/">A.R.L.O.</a></span>
-              <div className="flex items-center gap-3">
-                <Show when="signed-out">
-                  <SignInButton />
-                  <SignUpButton />
-                </Show>
-                <Show when="signed-in">
-                  <AcknowledgeGate />
-                  <HotkeyNav />
-                  <DropdownPortalSelect />
-                  <a href="/user">My Profile</a>
-                  <UserButton />
-                </Show>
-              </div>
-            </header>
-            <ImpersonationBanner />
-            {children}
+            <ActiveOrgProvider>
+              <header className="flex items-center justify-between px-6 py-3 border-b border-zinc-200 dark:border-zinc-800">
+                <span className="font-semibold text-sm"><Link href="/">A.R.L.O.</Link></span>
+                <div className="flex items-center gap-3">
+                  <Show when="signed-out">
+                    <SignInButton />
+                    <SignUpButton />
+                  </Show>
+                  <Show when="signed-in">
+                    <AcceptPendingInvites />
+                    <AcknowledgeGate />
+                    <HotkeyNav />
+                    <OrgSwitcher />
+                    <DropdownPortalSelect />
+                    <Link href="/user">My Profile</Link>
+                    <UserButton />
+                  </Show>
+                </div>
+              </header>
+              <ImpersonationBanner />
+              {children}
+            </ActiveOrgProvider>
           </ConvexClientProvider>
         </ClerkProvider>
       </body>
