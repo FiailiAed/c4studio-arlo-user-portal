@@ -77,12 +77,27 @@ export const updateProfile = mutation({
 });
 
 export const listAll = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await requireLeagueAdminQuery(ctx);
+  args: { orgId: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await requireLeagueAdminQuery(ctx, args.orgId);
     if (!identity) return null;
 
-    return await ctx.db.query("users").collect();
+    const memberships = await ctx.db
+      .query("orgMemberships")
+      .withIndex("by_org", (q) => q.eq("orgId", args.orgId))
+      .collect();
+
+    const users = await Promise.all(
+      memberships.map(async (m) => {
+        const user = await ctx.db
+          .query("users")
+          .withIndex("by_clerk_id", (q) => q.eq("clerkId", m.clerkId))
+          .unique();
+        return user ? { ...user, roles: m.roles } : null;
+      })
+    );
+
+    return users.filter((u): u is NonNullable<typeof u> => u !== null);
   },
 });
 
@@ -103,7 +118,6 @@ export const syncFromWebhook = internalMutation({
     firstName: v.optional(v.string()),
     lastName: v.optional(v.string()),
     email: v.optional(v.string()),
-    roles: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db
@@ -115,7 +129,6 @@ export const syncFromWebhook = internalMutation({
       firstName: args.firstName,
       lastName: args.lastName,
       email: args.email,
-      roles: args.roles,
     };
 
     if (existing) {

@@ -1,13 +1,19 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
-import { hasAnyRole, type AppRole } from "@/lib/roles";
 
 export async function POST(request: Request) {
   const authResult = await auth();
-  const { userId: callerId, sessionClaims } = authResult;
-  const callerRoles = (sessionClaims?.metadata as { roles?: AppRole[] } | undefined)?.roles;
-  if (!hasAnyRole(callerRoles, ["super_admin"])) {
+  const { userId: callerId } = authResult;
+
+  const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+  const token = await authResult.getToken({ template: "convex" });
+  let isSuperAdmin = false;
+  if (token) {
+    convex.setAuth(token);
+    isSuperAdmin = await convex.query(api.orgMemberships.amISuperAdmin, {});
+  }
+  if (!callerId || !isSuperAdmin) {
     return new Response("Forbidden", { status: 403 });
   }
 
@@ -40,9 +46,6 @@ export async function POST(request: Request) {
   redemptionUrl.searchParams.set("redirect_url", "/dashboard");
 
   try {
-    const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
-    const token = await authResult.getToken({ template: "convex" });
-    if (token) convex.setAuth(token);
     await convex.mutation(api.impersonation.logStart, { targetClerkId });
   } catch (err) {
     console.error("Failed to log impersonation event", err);

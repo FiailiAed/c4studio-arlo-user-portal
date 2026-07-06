@@ -7,7 +7,6 @@ export default defineSchema({
     firstName: v.optional(v.string()),
     lastName: v.optional(v.string()),
     email: v.optional(v.string()),
-    roles: v.optional(v.array(v.string())),
     phone: v.optional(v.string()),
     dateOfBirth: v.optional(v.string()),
     address: v.optional(
@@ -20,7 +19,42 @@ export default defineSchema({
     ),
   }).index("by_clerk_id", ["clerkId"]),
 
+  // Multi-tenancy: one row per Clerk Organization. `clerkOrgId` is the
+  // canonical join key stored as `orgId` on every tenant-scoped table below.
+  organizations: defineTable({
+    clerkOrgId: v.string(),
+    name: v.string(),
+    slug: v.optional(v.string()),
+    createdAt: v.number(),
+  }).index("by_clerk_org_id", ["clerkOrgId"]),
+
+  // Per-org roles, replacing the old global `users.roles`. A user can hold
+  // different (and multiple) AppRole values in each org they belong to.
+  orgMemberships: defineTable({
+    clerkId: v.string(),
+    orgId: v.string(), // = organizations.clerkOrgId
+    roles: v.array(v.string()),
+  })
+    .index("by_clerk_id", ["clerkId"])
+    .index("by_org", ["orgId"])
+    .index("by_org_and_clerk_id", ["orgId", "clerkId"]),
+
+  // Generic, arbitrary-depth, admin-defined org hierarchy (e.g. SJYLAX's
+  // League > Township > Program > Division > County > Team). `unitType` is a
+  // free-text label the admin chooses, not a fixed enum, so any client's
+  // hierarchy shape can be modeled as data. Not wired to clubs/teams yet.
+  orgUnits: defineTable({
+    orgId: v.string(),
+    parentUnitId: v.optional(v.id("orgUnits")), // undefined = root node
+    unitType: v.string(),
+    name: v.string(),
+    order: v.optional(v.number()),
+  })
+    .index("by_org", ["orgId"])
+    .index("by_org_and_parent", ["orgId", "parentUnitId"]),
+
   players: defineTable({
+    orgId: v.string(),
     guardianClerkId: v.string(),
     firstName: v.string(),
     lastName: v.string(),
@@ -30,6 +64,7 @@ export default defineSchema({
     grade: v.optional(v.string()),
   }).index("by_guardian", ["guardianClerkId"]),
   tableDefinitions: defineTable({
+    orgId: v.string(),
     name: v.string(),
     createdBy: v.string(), // clerkId
     columns: v.array(
@@ -46,30 +81,37 @@ export default defineSchema({
         options: v.optional(v.array(v.string())), // "select" only
       })
     ),
-  }).index("by_name", ["name"]),
+  }).index("by_org", ["orgId"]),
 
   customRecords: defineTable({
+    orgId: v.string(),
     tableId: v.id("tableDefinitions"),
     data: v.record(v.string(), v.any()), // columnKey -> value
-  }).index("by_table", ["tableId"]),
+  }).index("by_org_and_table", ["orgId", "tableId"]),
 
   impersonationEvents: defineTable({
+    orgId: v.optional(v.string()),
     adminClerkId: v.string(),
     targetClerkId: v.string(),
     startedAt: v.number(),
   }).index("by_admin", ["adminClerkId"]).index("by_target", ["targetClerkId"]),
 
   fields: defineTable({
+    orgId: v.string(),
     name: v.string(),
     location: v.optional(v.string()),
-  }).index("by_name", ["name"]),
+  }).index("by_org", ["orgId"]),
 
   teams: defineTable({
+    orgId: v.string(),
     name: v.string(),
     clubId: v.optional(v.id("clubs")),
-  }).index("by_name", ["name"]).index("by_club", ["clubId"]),
+  })
+    .index("by_club", ["clubId"])
+    .index("by_org", ["orgId"]),
 
   games: defineTable({
+    orgId: v.string(),
     homeTeamId: v.id("teams"),
     awayTeamId: v.id("teams"),
     fieldId: v.id("fields"),
@@ -89,31 +131,41 @@ export default defineSchema({
     awayScore: v.optional(v.number()),
     scoreVerified: v.optional(v.boolean()),
   })
-    .index("by_field_and_time", ["fieldId", "startTime"])
-    .index("by_start_time", ["startTime"])
-    .index("by_referee", ["refereeId"]),
+    .index("by_referee", ["refereeId"])
+    .index("by_org_and_start_time", ["orgId", "startTime"])
+    .index("by_org_and_field_and_time", ["orgId", "fieldId", "startTime"]),
 
   refereeProfiles: defineTable({
+    orgId: v.optional(v.string()),
     clerkId: v.string(),
     stripeConnectId: v.optional(v.string()),
     transfersActive: v.optional(v.boolean()), // cached from stripe.accounts.retrieve, refreshed on page load
   }).index("by_clerk_id", ["clerkId"]),
 
   clubs: defineTable({
+    orgId: v.string(),
     name: v.string(),
     coachClerkId: v.optional(v.string()),
-  }).index("by_coach", ["coachClerkId"]),
+  })
+    .index("by_coach", ["coachClerkId"])
+    .index("by_org", ["orgId"]),
 
   rosters: defineTable({
+    orgId: v.string(),
     teamId: v.id("teams"),
     playerId: v.id("players"),
-  }).index("by_team", ["teamId"]).index("by_player", ["playerId"]),
+  })
+    .index("by_team", ["teamId"])
+    .index("by_player", ["playerId"])
+    .index("by_org_and_team", ["orgId", "teamId"]),
 
   leagueSettings: defineTable({
+    orgId: v.string(),
     refereePayRateCents: v.number(),
-  }),
+  }).index("by_org", ["orgId"]),
 
   payoutLedger: defineTable({
+    orgId: v.string(),
     gameId: v.id("games"),
     refereeClerkId: v.string(),
     grossAmountCents: v.number(),
@@ -124,9 +176,12 @@ export default defineSchema({
     failureReason: v.optional(v.string()),
   })
     .index("by_game", ["gameId"])
-    .index("by_referee", ["refereeClerkId"]),
+    .index("by_org", ["orgId"])
+    .index("by_org_and_referee", ["orgId", "refereeClerkId"])
+    .index("by_org_and_game", ["orgId", "gameId"]),
 
   disputes: defineTable({
+    orgId: v.string(),
     gameId: v.id("games"),
     raisedByClerkId: v.string(), // the coach who disputed
     reason: v.string(),
@@ -136,21 +191,23 @@ export default defineSchema({
     resolvedAt: v.optional(v.number()),
   })
     .index("by_game", ["gameId"])
-    .index("by_status", ["status"]),
+    .index("by_org_and_status", ["orgId", "status"]),
 
   documents: defineTable({
+    orgId: v.string(),
     title: v.string(),
     storageId: v.id("_storage"),
     category: v.optional(v.string()),
     requiredForRoles: v.array(v.string()),
     uploadedByClerkId: v.string(),
-  }),
+  }).index("by_org", ["orgId"]),
 
   documentAcknowledgments: defineTable({
+    orgId: v.string(),
     documentId: v.id("documents"),
     clerkId: v.string(),
     acknowledgedAt: v.number(),
   })
     .index("by_document", ["documentId"])
-    .index("by_user", ["clerkId"]),
+    .index("by_org_and_user", ["orgId", "clerkId"]),
 });

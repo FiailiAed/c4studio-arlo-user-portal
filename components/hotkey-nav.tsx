@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../convex/_generated/api";
 import { hasAnyRole } from "@/lib/roles";
+import { useOrgId } from "@/lib/use-org-id";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const CHORD_TIMEOUT_MS = 1000;
@@ -17,6 +18,7 @@ const DESTINATIONS: { key: string; href: string; label: string; allowed?: string
   { key: "r", href: "/referee", label: "Referee", allowed: ["referee", "league_admin", "super_admin"] },
   { key: "c", href: "/coach", label: "Coach", allowed: ["coach", "league_admin", "super_admin"] },
   { key: "p", href: "/players", label: "Players", allowed: ["family", "league_admin", "super_admin"] },
+  { key: "u", href: "/user", label: "My Profile" },
 ];
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -26,13 +28,14 @@ function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 export function HotkeyNav() {
-  const profile = useQuery(api.users.getCurrentUser);
+  const orgId = useOrgId();
+  const myRoles = useQuery(api.orgMemberships.getMyRoles, orgId ? { orgId } : "skip");
   const router = useRouter();
   const awaitingSecondKey = useRef(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
 
-  const roles = profile?.roles ?? [];
+  const roles = myRoles ?? [];
   const availableDestinations = DESTINATIONS.filter((d) => !d.allowed || hasAnyRole(roles, d.allowed));
 
   useEffect(() => {

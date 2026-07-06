@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useOrgId } from "@/lib/use-org-id";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
 
 type RosterRow = Doc<"rosters"> & { player: Doc<"players">; teamName: string };
@@ -27,9 +28,10 @@ type ScheduleRow = Doc<"games"> & {
 };
 
 export default function CoachDashboardPage() {
-  const club = useQuery(api.coach.getMyClub);
-  const roster = useQuery(api.coach.getMyRoster);
-  const schedule = useQuery(api.coach.getMySchedule);
+  const orgId = useOrgId();
+  const club = useQuery(api.coach.getMyClub, orgId ? { orgId } : "skip");
+  const roster = useQuery(api.coach.getMyRoster, orgId ? { orgId } : "skip");
+  const schedule = useQuery(api.coach.getMySchedule, orgId ? { orgId } : "skip");
   const verifyScore = useMutation(api.coach.verifyScore);
   const flagDispute = useMutation(api.coach.flagDispute);
   const [verifyingId, setVerifyingId] = useState<Id<"games"> | null>(null);
@@ -39,7 +41,7 @@ export default function CoachDashboardPage() {
   const [disputeSubmitting, setDisputeSubmitting] = useState(false);
   const [disputeError, setDisputeError] = useState<string | null>(null);
 
-  if (club === undefined || roster === undefined || schedule === undefined) {
+  if (!orgId || club === undefined || roster === undefined || schedule === undefined) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <ArloLoader />
@@ -58,9 +60,10 @@ export default function CoachDashboardPage() {
   }
 
   async function handleVerify(gameId: Id<"games">) {
+    if (!orgId) return;
     setVerifyingId(gameId);
     try {
-      await verifyScore({ gameId });
+      await verifyScore({ orgId, gameId });
     } finally {
       setVerifyingId(null);
     }
@@ -73,11 +76,11 @@ export default function CoachDashboardPage() {
   }
 
   async function handleDispute() {
-    if (!disputingGame || !disputeReason.trim()) return;
+    if (!orgId || !disputingGame || !disputeReason.trim()) return;
     setDisputeSubmitting(true);
     setDisputeError(null);
     try {
-      await flagDispute({ gameId: disputingGame._id, reason: disputeReason.trim() });
+      await flagDispute({ orgId, gameId: disputingGame._id, reason: disputeReason.trim() });
       setDisputingGame(null);
     } catch (e) {
       setDisputeError(e instanceof Error ? e.message : "Failed to submit dispute");

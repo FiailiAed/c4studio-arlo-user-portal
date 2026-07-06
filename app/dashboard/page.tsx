@@ -11,10 +11,12 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { DASHBOARD_PLACEHOLDERS, hasAnyRole, type AppRole } from "@/lib/roles";
+import { useOrgId } from "@/lib/use-org-id";
 
 export default function DashboardPage() {
   const { user: clerkUser } = useUser();
-  const profile = useQuery(api.users.getCurrentUser);
+  const orgId = useOrgId();
+  const myRoles = useQuery(api.orgMemberships.getMyRoles, orgId ? { orgId } : "skip");
   const upsertUser = useMutation(api.users.upsertUser);
 
   useEffect(() => {
@@ -26,7 +28,7 @@ export default function DashboardPage() {
     });
   }, [clerkUser?.id, upsertUser]);
 
-  if (profile === undefined) {
+  if (!orgId || myRoles === undefined) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <ArloLoader />
@@ -34,7 +36,7 @@ export default function DashboardPage() {
     );
   }
 
-  const roles = (profile?.roles as AppRole[] | undefined) ?? [];
+  const roles = (myRoles as AppRole[] | null) ?? [];
 
   return (
     <main className="flex flex-1 flex-col items-center py-12 px-4">

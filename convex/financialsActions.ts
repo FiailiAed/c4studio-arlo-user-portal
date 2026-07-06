@@ -80,9 +80,9 @@ export const triggerStripePayout = internalAction({
 });
 
 export const startOnboarding = action({
-  args: { returnUrl: v.string() },
+  args: { orgId: v.string(), returnUrl: v.string() },
   handler: async (ctx, args): Promise<{ url: string }> => {
-    const context = await ctx.runQuery(internal.financials.getMyRefereeContext, {});
+    const context = await ctx.runQuery(internal.financials.getMyRefereeContext, { orgId: args.orgId });
     if (!context) throw new Error("Not authenticated");
 
     const stripe = getStripeClient();
@@ -114,9 +114,9 @@ export const startOnboarding = action({
 });
 
 export const refreshMyPayoutStatus = action({
-  args: {},
-  handler: async (ctx): Promise<{ transfersActive: boolean } | null> => {
-    const context = await ctx.runQuery(internal.financials.getMyRefereeContext, {});
+  args: { orgId: v.string() },
+  handler: async (ctx, args): Promise<{ transfersActive: boolean } | null> => {
+    const context = await ctx.runQuery(internal.financials.getMyRefereeContext, { orgId: args.orgId });
     if (!context) throw new Error("Not authenticated");
     if (!context.stripeConnectId) return null;
 
@@ -126,9 +126,9 @@ export const refreshMyPayoutStatus = action({
 });
 
 export const refreshRefereePayoutStatus = action({
-  args: { refereeClerkId: v.string() },
+  args: { orgId: v.string(), refereeClerkId: v.string() },
   handler: async (ctx, args): Promise<{ transfersActive: boolean } | null> => {
-    const admin = await ctx.runQuery(internal.financials.assertLeagueAdmin, {});
+    const admin = await ctx.runQuery(internal.financials.assertLeagueAdmin, { orgId: args.orgId });
     if (!admin) throw new Error("Forbidden");
 
     const { stripeConnectId } = await ctx.runQuery(internal.financials.getRefereeStripeAccount, {
@@ -142,9 +142,9 @@ export const refreshRefereePayoutStatus = action({
 });
 
 export const createExpressDashboardLink = action({
-  args: {},
-  handler: async (ctx): Promise<{ url: string }> => {
-    const context = await ctx.runQuery(internal.financials.getMyRefereeContext, {});
+  args: { orgId: v.string() },
+  handler: async (ctx, args): Promise<{ url: string }> => {
+    const context = await ctx.runQuery(internal.financials.getMyRefereeContext, { orgId: args.orgId });
     if (!context) throw new Error("Not authenticated");
     if (!context.stripeConnectId) throw new Error("No Stripe account connected yet");
 

@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { useOrgId } from "@/lib/use-org-id";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 
 type ClubRow = Doc<"clubs"> & { coachName?: string };
@@ -26,8 +27,9 @@ const SELECT_CLASSNAME =
   "rounded-md border border-input bg-background px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring/50";
 
 export default function AdminClubsPage() {
-  const clubs = useQuery(api.clubs.listClubs);
-  const coaches = useQuery(api.clubs.listCoaches);
+  const orgId = useOrgId();
+  const clubs = useQuery(api.clubs.listClubs, orgId ? { orgId } : "skip");
+  const coaches = useQuery(api.clubs.listCoaches, orgId ? { orgId } : "skip");
   const createClub = useMutation(api.clubs.createClub);
   const renameClub = useMutation(api.clubs.renameClub);
   const assignCoach = useMutation(api.clubs.assignCoach);
@@ -47,7 +49,7 @@ export default function AdminClubsPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
-  if (clubs === undefined || coaches === undefined) {
+  if (!orgId || clubs === undefined || coaches === undefined) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <ArloLoader />
@@ -56,10 +58,10 @@ export default function AdminClubsPage() {
   }
 
   async function handleCreate() {
-    if (!name.trim()) return;
+    if (!orgId || !name.trim()) return;
     setSubmitting(true);
     try {
-      await createClub({ name: name.trim() });
+      await createClub({ orgId, name: name.trim() });
       setCreateOpen(false);
       setName("");
     } finally {
@@ -68,12 +70,13 @@ export default function AdminClubsPage() {
   }
 
   async function commitRename(clubId: Id<"clubs">) {
+    if (!orgId) return;
     const draft = renameDrafts[clubId];
     if (draft === undefined) return;
     const trimmed = draft.trim();
     const current = clubs?.find((c) => c._id === clubId);
     if (!trimmed || trimmed === current?.name) return;
-    await renameClub({ clubId, name: trimmed });
+    await renameClub({ orgId, clubId, name: trimmed });
   }
 
   function openAssign(club: ClubRow) {
@@ -82,10 +85,10 @@ export default function AdminClubsPage() {
   }
 
   async function handleAssignSubmit() {
-    if (!assigningClub) return;
+    if (!orgId || !assigningClub) return;
     setAssignSubmitting(true);
     try {
-      await assignCoach({ clubId: assigningClub._id, coachClerkId: assignCoachId || undefined });
+      await assignCoach({ orgId, clubId: assigningClub._id, coachClerkId: assignCoachId || undefined });
       setAssigningClub(null);
     } finally {
       setAssignSubmitting(false);
@@ -93,11 +96,11 @@ export default function AdminClubsPage() {
   }
 
   async function confirmDelete() {
-    if (!pendingDelete) return;
+    if (!orgId || !pendingDelete) return;
     setDeleteSubmitting(true);
     setDeleteError(null);
     try {
-      await deleteClub({ clubId: pendingDelete._id });
+      await deleteClub({ orgId, clubId: pendingDelete._id });
       setPendingDelete(null);
     } catch (e) {
       setDeleteError(e instanceof Error ? e.message : "Failed to delete club");

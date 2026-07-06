@@ -19,6 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getRoleConfig, type AppRole } from "@/lib/roles";
+import { useOrgId } from "@/lib/use-org-id";
 import type { Doc } from "../../../../convex/_generated/dataModel";
 
 const ROLES: AppRole[] = ["family", "referee", "program_admin", "coach", "league_admin", "super_admin"];
@@ -30,7 +31,8 @@ function filenameToTitle(filename: string): string {
 type DocumentRow = Doc<"documents"> & { url: string | null; acknowledgmentCount: number };
 
 export default function AdminDocumentsPage() {
-  const documents = useQuery(api.documents.listDocuments);
+  const orgId = useOrgId();
+  const documents = useQuery(api.documents.listDocuments, orgId ? { orgId } : "skip");
   const generateUploadUrl = useMutation(api.documents.generateUploadUrl);
   const saveDocumentMetadata = useMutation(api.documents.saveDocumentMetadata);
   const deleteDocument = useMutation(api.documents.deleteDocument);
@@ -46,7 +48,7 @@ export default function AdminDocumentsPage() {
   const [pendingDelete, setPendingDelete] = useState<DocumentRow | null>(null);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
-  if (documents === undefined) {
+  if (!orgId || documents === undefined) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <ArloLoader />
@@ -59,6 +61,7 @@ export default function AdminDocumentsPage() {
   }
 
   async function handleUpload() {
+    if (!orgId) return;
     if (!title.trim()) {
       setUploadError("Enter a title before uploading.");
       return;
@@ -71,7 +74,7 @@ export default function AdminDocumentsPage() {
     setUploading(true);
     setUploadError(null);
     try {
-      const uploadUrl = await generateUploadUrl();
+      const uploadUrl = await generateUploadUrl({ orgId });
       const res = await fetch(uploadUrl, {
         method: "POST",
         headers: { "Content-Type": selectedFile.type },
@@ -81,6 +84,7 @@ export default function AdminDocumentsPage() {
       const { storageId } = await res.json();
 
       await saveDocumentMetadata({
+        orgId,
         title: title.trim(),
         storageId,
         category: category.trim() || undefined,
@@ -100,10 +104,10 @@ export default function AdminDocumentsPage() {
   }
 
   async function confirmDelete() {
-    if (!pendingDelete) return;
+    if (!orgId || !pendingDelete) return;
     setDeleteSubmitting(true);
     try {
-      await deleteDocument({ documentId: pendingDelete._id });
+      await deleteDocument({ orgId, documentId: pendingDelete._id });
       setPendingDelete(null);
     } finally {
       setDeleteSubmitting(false);

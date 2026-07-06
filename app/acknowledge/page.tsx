@@ -8,9 +8,11 @@ import { ArloLoader } from "@/components/ui/arlo-loader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Id } from "../../convex/_generated/dataModel";
+import { useOrgId } from "@/lib/use-org-id";
 
 export default function AcknowledgePage() {
-  const required = useQuery(api.documents.getMyRequiredDocuments);
+  const orgId = useOrgId();
+  const required = useQuery(api.documents.getMyRequiredDocuments, orgId ? { orgId } : "skip");
   const acknowledgeDocument = useMutation(api.documents.acknowledgeDocument);
   const router = useRouter();
   const [acknowledgingId, setAcknowledgingId] = useState<Id<"documents"> | null>(null);
@@ -32,9 +34,10 @@ export default function AcknowledgePage() {
   }
 
   async function handleAcknowledge(documentId: Id<"documents">) {
+    if (!orgId) return;
     setAcknowledgingId(documentId);
     try {
-      await acknowledgeDocument({ documentId });
+      await acknowledgeDocument({ orgId, documentId });
     } finally {
       setAcknowledgingId(null);
     }

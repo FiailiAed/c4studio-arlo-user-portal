@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { useOrgId } from "@/lib/use-org-id";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 
 type GameStatus = Doc<"games">["status"];
@@ -46,9 +47,10 @@ function toDatetimeLocalValue(ms: number): string {
 }
 
 export default function AdminSchedulePage() {
-  const games = useQuery(api.games.listGames, {});
-  const teams = useQuery(api.teams.listTeams);
-  const fields = useQuery(api.fields.listFields);
+  const orgId = useOrgId();
+  const games = useQuery(api.games.listGames, orgId ? { orgId } : "skip");
+  const teams = useQuery(api.teams.listTeams, orgId ? { orgId } : "skip");
+  const fields = useQuery(api.fields.listFields, orgId ? { orgId } : "skip");
 
   const createGame = useMutation(api.games.createGame);
   const updateGameSlot = useMutation(api.games.updateGameSlot);
@@ -78,10 +80,10 @@ export default function AdminSchedulePage() {
 
   const availableRefs = useQuery(
     api.referees.getAvailableRefs,
-    assigningGame ? { gameId: assigningGame._id } : "skip"
+    orgId && assigningGame ? { orgId, gameId: assigningGame._id } : "skip"
   );
 
-  if (games === undefined || teams === undefined || fields === undefined) {
+  if (!orgId || games === undefined || teams === undefined || fields === undefined) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <ArloLoader />
@@ -98,7 +100,7 @@ export default function AdminSchedulePage() {
   }
 
   async function handleCreate() {
-    if (!homeTeamId || !awayTeamId || !fieldId || !startTime) return;
+    if (!orgId || !homeTeamId || !awayTeamId || !fieldId || !startTime) return;
     if (homeTeamId === awayTeamId) {
       setError("Home and away team must be different");
       return;
@@ -107,6 +109,7 @@ export default function AdminSchedulePage() {
     setError(null);
     try {
       await createGame({
+        orgId,
         homeTeamId: homeTeamId as Id<"teams">,
         awayTeamId: awayTeamId as Id<"teams">,
         fieldId: fieldId as Id<"fields">,
@@ -129,11 +132,12 @@ export default function AdminSchedulePage() {
   }
 
   async function handleEditSubmit() {
-    if (!editingGame) return;
+    if (!orgId || !editingGame) return;
     setEditSubmitting(true);
     setEditError(null);
     try {
       await updateGameSlot({
+        orgId,
         gameId: editingGame._id,
         fieldId: editFieldId as Id<"fields">,
         startTime: new Date(editStartTime).getTime(),
@@ -158,10 +162,10 @@ export default function AdminSchedulePage() {
   }
 
   async function handleAssignSubmit() {
-    if (!assigningGame || !assignRefereeId) return;
+    if (!orgId || !assigningGame || !assignRefereeId) return;
     setAssignSubmitting(true);
     try {
-      await assignReferee({ gameId: assigningGame._id, refereeClerkId: assignRefereeId });
+      await assignReferee({ orgId, gameId: assigningGame._id, refereeClerkId: assignRefereeId });
       setAssigningGame(null);
     } finally {
       setAssignSubmitting(false);
@@ -169,10 +173,10 @@ export default function AdminSchedulePage() {
   }
 
   async function confirmCancel() {
-    if (!pendingCancel) return;
+    if (!orgId || !pendingCancel) return;
     setCancelSubmitting(true);
     try {
-      await cancelGame({ gameId: pendingCancel._id });
+      await cancelGame({ orgId, gameId: pendingCancel._id });
       setPendingCancel(null);
     } finally {
       setCancelSubmitting(false);

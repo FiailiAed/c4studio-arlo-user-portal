@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useOrgId } from "@/lib/use-org-id";
 import type { Doc } from "../../../convex/_generated/dataModel";
 
 type DisputeRow = Doc<"disputes"> & {
@@ -26,7 +27,8 @@ type DisputeRow = Doc<"disputes"> & {
 };
 
 export default function AdminExceptionsPage() {
-  const disputes = useQuery(api.disputes.listOpenDisputes);
+  const orgId = useOrgId();
+  const disputes = useQuery(api.disputes.listOpenDisputes, orgId ? { orgId } : "skip");
   const resolveDispute = useMutation(api.disputes.resolveDispute);
 
   const [resolvingDispute, setResolvingDispute] = useState<DisputeRow | null>(null);
@@ -36,7 +38,7 @@ export default function AdminExceptionsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (disputes === undefined) {
+  if (!orgId || disputes === undefined) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <ArloLoader />
@@ -53,11 +55,12 @@ export default function AdminExceptionsPage() {
   }
 
   async function handleResolve() {
-    if (!resolvingDispute || !notes.trim()) return;
+    if (!orgId || !resolvingDispute || !notes.trim()) return;
     setSubmitting(true);
     setError(null);
     try {
       await resolveDispute({
+        orgId,
         disputeId: resolvingDispute._id,
         resolutionNotes: notes.trim(),
         homeScore: homeScore === "" ? undefined : Number(homeScore),

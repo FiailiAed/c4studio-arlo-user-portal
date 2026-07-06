@@ -12,12 +12,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { getRoleConfig, type AppRole } from "@/lib/roles";
+import { useOrgId } from "@/lib/use-org-id";
 
 export default function UserPage() {
   const { user: clerkUser } = useUser();
+  const orgId = useOrgId();
   const profile = useQuery(api.users.getCurrentUser);
+  const myRoles = useQuery(api.orgMemberships.getMyRoles, orgId ? { orgId } : "skip");
 
-  if (profile === undefined) {
+  if (!orgId || profile === undefined || myRoles === undefined) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <ArloLoader />
@@ -25,7 +28,7 @@ export default function UserPage() {
     );
   }
 
-  const roles = (profile?.roles as AppRole[] | undefined) ?? [];
+  const roles = (myRoles as AppRole[] | null) ?? [];
 
   const initials = (
     (clerkUser?.firstName?.[0] ?? "") + (clerkUser?.lastName?.[0] ?? "")

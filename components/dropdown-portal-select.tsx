@@ -1,19 +1,46 @@
 "use client";
 
-import { useAuth, useClerk, useUser } from "@clerk/nextjs";
+import { useQuery } from "convex/react";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { api } from "../convex/_generated/api";
+import { hasAnyRole } from "@/lib/roles";
+import { useOrgId } from "@/lib/use-org-id";
+
+interface Portal {
+  label: string;
+  href: string;
+  allowed: string[];
+}
+
+// Kept in the same order/shape as HotkeyNav's DESTINATIONS — both are role-filtered
+// navigation lists sourced from the same org-scoped roles query.
+const PORTALS: Portal[] = [
+  { label: "Admin", href: "/admin", allowed: ["league_admin", "super_admin"] },
+  { label: "Players", href: "/players", allowed: ["family", "league_admin", "super_admin"] },
+  { label: "Referee", href: "/referee", allowed: ["referee", "league_admin", "super_admin"] },
+  { label: "Coach", href: "/coach", allowed: ["coach", "league_admin", "super_admin"] },
+  // /program has no real page yet (program_admin is speculative scaffolding) —
+  // kept visible to that role as a placeholder reminder rather than removed.
+  { label: "Program", href: "/program", allowed: ["program_admin", "league_admin", "super_admin"] },
+];
 
 export function DropdownPortalSelect() {
+  const orgId = useOrgId();
+  const myRoles = useQuery(api.orgMemberships.getMyRoles, orgId ? { orgId } : "skip");
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
-  const [selected, setSelected] = useState("Select Portal");
 
-  const portals = ["Admin", "Players", "Referee", "Coach", "Program"];
+  const availablePortals = PORTALS.filter((p) => hasAnyRole(myRoles ?? [], p.allowed));
+  const currentPortal = availablePortals.find((p) => pathname.startsWith(p.href));
+  const selected = currentPortal?.label ?? "Select Portal";
 
-  const handleSelect = (portal: string) => {
-      setSelected(portal);
-      setIsOpen(false);
-      window.open(`/${portal.toLowerCase()}`, "_parent");
+  const handleSelect = (portal: Portal) => {
+    setIsOpen(false);
+    window.open(portal.href, "_parent");
   };
+
+  if (availablePortals.length === 0) return null;
 
   return (
     <div className="flex flex-col w-44 text-sm relative">
@@ -25,10 +52,10 @@ export function DropdownPortalSelect() {
         </button>
 
         {isOpen && (
-            <ul className="w-full bg-white border border-gray-300 rounded shadow-md mt-1 py-2 mb-[-10rem]">
-                {portals.map((portal) => (
-                    <li key={portal} className="px-4 py-2 hover:bg-linear-22 from-slate-700 to-slate-900 hover:text-white cursor-pointer" onClick={() => handleSelect(portal)} >
-                        <a href={`/${portal.toLowerCase()}`}>{portal}</a>
+            <ul className="absolute left-0 top-full z-50 w-full bg-white border border-gray-300 rounded shadow-md mt-1 py-2">
+                {availablePortals.map((portal) => (
+                    <li key={portal.label} className="px-4 py-2 hover:bg-linear-22 from-slate-700 to-slate-900 hover:text-white cursor-pointer" onClick={() => handleSelect(portal)} >
+                        <a href={portal.href}>{portal.label}</a>
                     </li>
                 ))}
             </ul>

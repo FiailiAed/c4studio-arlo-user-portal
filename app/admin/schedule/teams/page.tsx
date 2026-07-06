@@ -16,14 +16,16 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { useOrgId } from "@/lib/use-org-id";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 
 const SELECT_CLASSNAME =
   "rounded-md border border-input bg-background px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring/50";
 
 export default function AdminTeamsPage() {
-  const teams = useQuery(api.teams.listTeams);
-  const clubs = useQuery(api.clubs.listClubs);
+  const orgId = useOrgId();
+  const teams = useQuery(api.teams.listTeams, orgId ? { orgId } : "skip");
+  const clubs = useQuery(api.clubs.listClubs, orgId ? { orgId } : "skip");
   const createTeam = useMutation(api.teams.createTeam);
   const renameTeam = useMutation(api.teams.renameTeam);
   const deleteTeam = useMutation(api.teams.deleteTeam);
@@ -39,7 +41,7 @@ export default function AdminTeamsPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
-  if (teams === undefined || clubs === undefined) {
+  if (!orgId || teams === undefined || clubs === undefined) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <ArloLoader />
@@ -48,10 +50,10 @@ export default function AdminTeamsPage() {
   }
 
   async function handleCreate() {
-    if (!name.trim()) return;
+    if (!orgId || !name.trim()) return;
     setSubmitting(true);
     try {
-      await createTeam({ name: name.trim() });
+      await createTeam({ orgId, name: name.trim() });
       setCreateOpen(false);
       setName("");
     } finally {
@@ -64,16 +66,16 @@ export default function AdminTeamsPage() {
     if (draft === undefined) return;
     const trimmed = draft.trim();
     const current = teams?.find((t) => t._id === teamId);
-    if (!trimmed || trimmed === current?.name) return;
-    await renameTeam({ teamId, name: trimmed });
+    if (!orgId || !trimmed || trimmed === current?.name) return;
+    await renameTeam({ orgId, teamId, name: trimmed });
   }
 
   async function confirmDelete() {
-    if (!pendingDelete) return;
+    if (!orgId || !pendingDelete) return;
     setDeleteSubmitting(true);
     setDeleteError(null);
     try {
-      await deleteTeam({ teamId: pendingDelete._id });
+      await deleteTeam({ orgId, teamId: pendingDelete._id });
       setPendingDelete(null);
     } catch (e) {
       setDeleteError(e instanceof Error ? e.message : "Failed to delete team");
@@ -83,7 +85,8 @@ export default function AdminTeamsPage() {
   }
 
   async function handleClubChange(teamId: Id<"teams">, clubId: string) {
-    await assignTeamToClub({ teamId, clubId: clubId ? (clubId as Id<"clubs">) : undefined });
+    if (!orgId) return;
+    await assignTeamToClub({ orgId, teamId, clubId: clubId ? (clubId as Id<"clubs">) : undefined });
   }
 
   const columns: DataTableColumn<Doc<"teams">>[] = [

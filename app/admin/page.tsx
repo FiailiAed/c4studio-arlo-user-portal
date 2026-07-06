@@ -9,6 +9,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { getRoleConfig, type AppRole } from "@/lib/roles";
+import { useOrgId } from "@/lib/use-org-id";
 
 export default function AdminPage() {
   return (
@@ -48,7 +49,8 @@ export default function AdminPage() {
 const ALERT_WINDOW_MS = 48 * 60 * 60 * 1000;
 
 function ArloAlertCard() {
-  const games = useQuery(api.games.listGames, {});
+  const orgId = useOrgId();
+  const games = useQuery(api.games.listGames, orgId ? { orgId } : "skip");
   const [now] = useState(() => Date.now());
 
   if (!games) return null;
@@ -92,7 +94,8 @@ function ArloAlertCard() {
 }
 
 function DisputeAlertCard() {
-  const disputes = useQuery(api.disputes.listOpenDisputes);
+  const orgId = useOrgId();
+  const disputes = useQuery(api.disputes.listOpenDisputes, orgId ? { orgId } : "skip");
 
   if (!disputes || disputes.length === 0) return null;
 
@@ -116,7 +119,8 @@ function DisputeAlertCard() {
 }
 
 function AdminOverviewCard() {
-  const allUsers = useQuery(api.users.listAll);
+  const orgId = useOrgId();
+  const allUsers = useQuery(api.users.listAll, orgId ? { orgId } : "skip");
 
   if (!allUsers) return null;
 

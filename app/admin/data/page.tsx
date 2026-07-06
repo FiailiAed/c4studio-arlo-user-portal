@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useOrgId } from "@/lib/use-org-id";
 
 type ColumnType = "text" | "number" | "date" | "boolean" | "select";
 
@@ -36,7 +37,8 @@ function emptyColumnDraft(): ColumnDraft {
 }
 
 export default function AdminDataPage() {
-  const tables = useQuery(api.customTables.listTables);
+  const orgId = useOrgId();
+  const tables = useQuery(api.customTables.listTables, orgId ? { orgId } : "skip");
   const createTable = useMutation(api.customTables.createTable);
   const router = useRouter();
 
@@ -63,10 +65,11 @@ export default function AdminDataPage() {
   }
 
   async function handleSubmit() {
-    if (!name.trim() || columns.length === 0) return;
+    if (!orgId || !name.trim() || columns.length === 0) return;
     setSubmitting(true);
     try {
       const tableId = await createTable({
+        orgId,
         name: name.trim(),
         columns: columns
           .filter((col) => col.label.trim())
@@ -90,7 +93,7 @@ export default function AdminDataPage() {
     }
   }
 
-  if (tables === undefined) {
+  if (!orgId || tables === undefined) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <ArloLoader />

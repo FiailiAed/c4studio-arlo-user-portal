@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useOrgId } from "@/lib/use-org-id";
 import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
 
 type RosterRow = Doc<"rosters"> & { player: Doc<"players"> };
@@ -23,9 +24,9 @@ function playerLabel(player: Doc<"players">) {
   return `${player.firstName} ${player.lastName}`;
 }
 
-function TeamRosterSection({ team }: { team: Doc<"teams"> }) {
-  const roster = useQuery(api.rosters.listRosterForTeam, { teamId: team._id });
-  const allPlayers = useQuery(api.players.listAllPlayers);
+function TeamRosterSection({ orgId, team }: { orgId: string; team: Doc<"teams"> }) {
+  const roster = useQuery(api.rosters.listRosterForTeam, { orgId, teamId: team._id });
+  const allPlayers = useQuery(api.players.listAllPlayers, { orgId });
   const addToRoster = useMutation(api.rosters.addToRoster);
   const removeFromRoster = useMutation(api.rosters.removeFromRoster);
 
@@ -44,7 +45,7 @@ function TeamRosterSection({ team }: { team: Doc<"teams"> }) {
     setAddSubmitting(true);
     setError(null);
     try {
-      await addToRoster({ teamId: team._id, playerId });
+      await addToRoster({ orgId, teamId: team._id, playerId });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to add player");
     } finally {
@@ -72,7 +73,7 @@ function TeamRosterSection({ team }: { team: Doc<"teams"> }) {
           getRowKey={(r) => r._id}
           emptyMessage="No players on this roster yet."
           renderActions={(r) => (
-            <Button size="sm" variant="destructive" onClick={() => removeFromRoster({ rosterId: r._id })}>
+            <Button size="sm" variant="destructive" onClick={() => removeFromRoster({ orgId, rosterId: r._id })}>
               Remove
             </Button>
           )}
@@ -129,10 +130,11 @@ export default function AdminClubRosterPage({
 }) {
   const { clubId } = use(params);
   const id = clubId as Id<"clubs">;
+  const orgId = useOrgId();
 
-  const result = useQuery(api.clubs.getClub, { clubId: id });
+  const result = useQuery(api.clubs.getClub, orgId ? { orgId, clubId: id } : "skip");
 
-  if (result === undefined) {
+  if (!orgId || result === undefined) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <ArloLoader />
@@ -160,7 +162,7 @@ export default function AdminClubRosterPage({
             This club has no teams yet. Assign a team to this club from Manage Teams first.
           </p>
         ) : (
-          teams.map((team) => <TeamRosterSection key={team._id} team={team} />)
+          teams.map((team) => <TeamRosterSection key={team._id} orgId={orgId} team={team} />)
         )}
       </div>
     </main>

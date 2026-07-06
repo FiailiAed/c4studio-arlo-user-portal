@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useOrgId } from "@/lib/use-org-id";
 import type { Doc } from "../../../../convex/_generated/dataModel";
 
 interface FieldDraft {
@@ -23,7 +24,8 @@ interface FieldDraft {
 }
 
 export default function AdminFieldsPage() {
-  const fields = useQuery(api.fields.listFields);
+  const orgId = useOrgId();
+  const fields = useQuery(api.fields.listFields, orgId ? { orgId } : "skip");
   const createField = useMutation(api.fields.createField);
   const renameField = useMutation(api.fields.renameField);
   const deleteField = useMutation(api.fields.deleteField);
@@ -39,7 +41,7 @@ export default function AdminFieldsPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
-  if (fields === undefined) {
+  if (!orgId || fields === undefined) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <ArloLoader />
@@ -48,10 +50,10 @@ export default function AdminFieldsPage() {
   }
 
   async function handleCreate() {
-    if (!name.trim()) return;
+    if (!orgId || !name.trim()) return;
     setSubmitting(true);
     try {
-      await createField({ name: name.trim(), location: location.trim() || undefined });
+      await createField({ orgId, name: name.trim(), location: location.trim() || undefined });
       setCreateOpen(false);
       setName("");
       setLocation("");
@@ -73,17 +75,17 @@ export default function AdminFieldsPage() {
     if (!draft) return;
     const trimmedName = draft.name.trim();
     const trimmedLocation = draft.location.trim();
-    if (!trimmedName) return;
+    if (!orgId || !trimmedName) return;
     if (trimmedName === field.name && trimmedLocation === (field.location ?? "")) return;
-    await renameField({ fieldId: field._id, name: trimmedName, location: trimmedLocation || undefined });
+    await renameField({ orgId, fieldId: field._id, name: trimmedName, location: trimmedLocation || undefined });
   }
 
   async function confirmDelete() {
-    if (!pendingDelete) return;
+    if (!orgId || !pendingDelete) return;
     setDeleteSubmitting(true);
     setDeleteError(null);
     try {
-      await deleteField({ fieldId: pendingDelete._id });
+      await deleteField({ orgId, fieldId: pendingDelete._id });
       setPendingDelete(null);
     } catch (e) {
       setDeleteError(e instanceof Error ? e.message : "Failed to delete field");

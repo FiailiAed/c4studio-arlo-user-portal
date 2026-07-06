@@ -6,12 +6,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getRoleConfig, type AppRole } from "@/lib/roles";
+import { useOrgId } from "@/lib/use-org-id";
 
 const ROLES: AppRole[] = ["family", "referee", "program_admin", "coach", "league_admin", "super_admin"];
 
 type Status = "idle" | "submitting" | "success" | "error";
 
 export default function InviteUsersPage() {
+  const orgId = useOrgId();
   const [email, setEmail] = useState("");
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [status, setStatus] = useState<Status>("idle");
@@ -25,12 +27,13 @@ export default function InviteUsersPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!orgId) return;
     setStatus("submitting");
 
     const res = await fetch("/api/users/invite", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, roles }),
+      body: JSON.stringify({ orgId, email, roles }),
     });
 
     if (res.ok) {
@@ -94,7 +97,7 @@ export default function InviteUsersPage() {
               )}
               {status === "error" && <p className="text-sm text-destructive">{errorMessage}</p>}
 
-              <Button type="submit" disabled={!email || roles.length === 0 || status === "submitting"}>
+              <Button type="submit" disabled={!orgId || !email || roles.length === 0 || status === "submitting"}>
                 {status === "submitting" ? "Sending…" : "Send Invite"}
               </Button>
             </form>

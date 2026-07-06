@@ -17,6 +17,8 @@ const ADMIN_NAV = [
   { href: "/admin/financials", label: "Financials" },
   { href: "/admin/exceptions", label: "Exceptions" },
   { href: "/admin/settings/documents", label: "Documents" },
+  { href: "/admin/org-units", label: "Org Structure" },
+  { href: "/admin/organizations", label: "Organizations" },
 ] as const;
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

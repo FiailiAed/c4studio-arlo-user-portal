@@ -3,24 +3,26 @@ import { v } from "convex/values";
 import { requireLeagueAdminMutation, requireLeagueAdminQuery } from "./lib/auth";
 
 export const generateUploadUrl = mutation({
-  args: {},
-  handler: async (ctx) => {
-    await requireLeagueAdminMutation(ctx);
+  args: { orgId: v.string() },
+  handler: async (ctx, args) => {
+    await requireLeagueAdminMutation(ctx, args.orgId);
     return await ctx.storage.generateUploadUrl();
   },
 });
 
 export const saveDocumentMetadata = mutation({
   args: {
+    orgId: v.string(),
     title: v.string(),
     storageId: v.id("_storage"),
     category: v.optional(v.string()),
     requiredForRoles: v.array(v.string()),
   },
   handler: async (ctx, args) => {
-    const identity = await requireLeagueAdminMutation(ctx);
+    const identity = await requireLeagueAdminMutation(ctx, args.orgId);
 
     return await ctx.db.insert("documents", {
+      orgId: args.orgId,
       title: args.title,
       storageId: args.storageId,
       category: args.category,
@@ -31,12 +33,15 @@ export const saveDocumentMetadata = mutation({
 });
 
 export const listDocuments = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await requireLeagueAdminQuery(ctx);
+  args: { orgId: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await requireLeagueAdminQuery(ctx, args.orgId);
     if (!identity) return null;
 
-    const docs = await ctx.db.query("documents").collect();
+    const docs = await ctx.db
+      .query("documents")
+      .withIndex("by_org", (q) => q.eq("orgId", args.orgId))
+      .collect();
     const results = [];
     for (const doc of docs) {
       const [url, acks] = await Promise.all([
@@ -53,12 +58,12 @@ export const listDocuments = query({
 });
 
 export const deleteDocument = mutation({
-  args: { documentId: v.id("documents") },
+  args: { orgId: v.string(), documentId: v.id("documents") },
   handler: async (ctx, args) => {
-    await requireLeagueAdminMutation(ctx);
+    await requireLeagueAdminMutation(ctx, args.orgId);
 
     const doc = await ctx.db.get(args.documentId);
-    if (!doc) throw new Error("Document not found");
+    if (!doc || doc.orgId !== args.orgId) throw new Error("Document not found");
 
     const acks = await ctx.db
       .query("documentAcknowledgments")
@@ -74,18 +79,21 @@ export const deleteDocument = mutation({
 });
 
 export const getMyRequiredDocuments = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { orgId: v.string() },
+  handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return null;
 
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+    const membership = await ctx.db
+      .query("orgMemberships")
+      .withIndex("by_org_and_clerk_id", (q) => q.eq("orgId", args.orgId).eq("clerkId", identity.subject))
       .unique();
-    const roles = user?.roles ?? [];
+    const roles = membership?.roles ?? [];
 
-    const allDocs = await ctx.db.query("documents").collect();
+    const allDocs = await ctx.db
+      .query("documents")
+      .withIndex("by_org", (q) => q.eq("orgId", args.orgId))
+      .collect();
     const requiredDocs = allDocs.filter((doc) => doc.requiredForRoles.some((r) => roles.includes(r)));
 
     const results = [];
@@ -103,10 +111,13 @@ export const getMyRequiredDocuments = query({
 });
 
 export const acknowledgeDocument = mutation({
-  args: { documentId: v.id("documents") },
+  args: { orgId: v.string(), documentId: v.id("documents") },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+
+    const doc = await ctx.db.get(args.documentId);
+    if (!doc || doc.orgId !== args.orgId) throw new Error("Document not found");
 
     const existing = await ctx.db
       .query("documentAcknowledgments")
@@ -116,6 +127,7 @@ export const acknowledgeDocument = mutation({
     if (existing) return;
 
     await ctx.db.insert("documentAcknowledgments", {
+      orgId: args.orgId,
       documentId: args.documentId,
       clerkId: identity.subject,
       acknowledgedAt: Date.now(),

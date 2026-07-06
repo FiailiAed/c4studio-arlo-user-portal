@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
+import { useOrgId } from "@/lib/use-org-id";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 
 type LedgerRow = Doc<"payoutLedger"> & {
@@ -30,9 +31,10 @@ function centsToDollarsInput(cents: number): string {
 }
 
 export default function AdminFinancialsPage() {
-  const settings = useQuery(api.financials.getLeagueSettings);
-  const referees = useQuery(api.financials.listReferees);
-  const ledger = useQuery(api.financials.listPayoutLedger);
+  const orgId = useOrgId();
+  const settings = useQuery(api.financials.getLeagueSettings, orgId ? { orgId } : "skip");
+  const referees = useQuery(api.financials.listReferees, orgId ? { orgId } : "skip");
+  const ledger = useQuery(api.financials.listPayoutLedger, orgId ? { orgId } : "skip");
 
   const updateLeagueSettings = useMutation(api.financials.updateLeagueSettings);
   const setRefereeStripeAccount = useMutation(api.financials.setRefereeStripeAccount);
@@ -46,7 +48,7 @@ export default function AdminFinancialsPage() {
   const [retryingId, setRetryingId] = useState<Id<"payoutLedger"> | null>(null);
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
 
-  if (settings === undefined || referees === undefined || ledger === undefined) {
+  if (!orgId || settings === undefined || referees === undefined || ledger === undefined) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <ArloLoader />
@@ -57,12 +59,12 @@ export default function AdminFinancialsPage() {
   const rateValue = rateDraft ?? (settings ? centsToDollarsInput(settings.refereePayRateCents) : "0.00");
 
   async function commitRate() {
-    if (rateDraft === null) return;
+    if (!orgId || rateDraft === null) return;
     const dollars = Number(rateDraft);
     if (Number.isNaN(dollars) || dollars < 0) return;
     setRateSubmitting(true);
     try {
-      await updateLeagueSettings({ refereePayRateCents: Math.round(dollars * 100) });
+      await updateLeagueSettings({ orgId, refereePayRateCents: Math.round(dollars * 100) });
       setRateDraft(null);
     } finally {
       setRateSubmitting(false);
@@ -71,23 +73,25 @@ export default function AdminFinancialsPage() {
 
   async function commitStripeId(clerkId: string) {
     const draft = stripeIdDrafts[clerkId];
-    if (draft === undefined) return;
-    await setRefereeStripeAccount({ refereeClerkId: clerkId, stripeConnectId: draft.trim() || undefined });
+    if (!orgId || draft === undefined) return;
+    await setRefereeStripeAccount({ orgId, refereeClerkId: clerkId, stripeConnectId: draft.trim() || undefined });
   }
 
   async function handleRetry(payoutLedgerId: Id<"payoutLedger">) {
+    if (!orgId) return;
     setRetryingId(payoutLedgerId);
     try {
-      await retryPayout({ payoutLedgerId });
+      await retryPayout({ orgId, payoutLedgerId });
     } finally {
       setRetryingId(null);
     }
   }
 
   async function handleRefreshStatus(refereeClerkId: string) {
+    if (!orgId) return;
     setRefreshingId(refereeClerkId);
     try {
-      await refreshRefereePayoutStatus({ refereeClerkId });
+      await refreshRefereePayoutStatus({ orgId, refereeClerkId });
     } finally {
       setRefreshingId(null);
     }

@@ -1,4 +1,4 @@
-import { ClerkProvider, Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
+import { ClerkProvider, OrganizationSwitcher, Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ImpersonationBanner } from "@/components/impersonation-banner";
@@ -47,6 +47,7 @@ export default function RootLayout({
                   <AcknowledgeGate />
                   <HotkeyNav />
                   <DropdownPortalSelect />
+                  <OrganizationSwitcher hidePersonal />
                   <a href="/user">My Profile</a>
                   <UserButton />
                 </Show>

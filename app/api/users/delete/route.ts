@@ -1,10 +1,8 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
-import { hasAnyRole, type AppRole } from "@/lib/roles";
 
 export async function POST(request: Request) {
-  const { userId: callerId, sessionClaims } = await auth();
-  const callerRoles = (sessionClaims?.metadata as { roles?: AppRole[] } | undefined)?.roles;
-  if (!hasAnyRole(callerRoles, ["league_admin", "super_admin"])) {
+  const { userId: callerId, orgId, orgRole } = await auth();
+  if (!orgId || orgRole !== "org:admin") {
     return new Response("Forbidden", { status: 403 });
   }
 
@@ -14,6 +12,19 @@ export async function POST(request: Request) {
   }
   if (userId === callerId) {
     return new Response("You cannot delete your own account", { status: 400 });
+  }
+
+  const secretKey = process.env.CLERK_SECRET_KEY;
+  if (!secretKey) return new Response("Missing CLERK_SECRET_KEY", { status: 500 });
+
+  const membershipRes = await fetch(`https://api.clerk.com/v1/organizations/${orgId}/memberships/${userId}`, {
+    headers: { Authorization: `Bearer ${secretKey}` },
+  });
+  if (membershipRes.ok) {
+    const membership = (await membershipRes.json()) as { public_metadata?: { roles?: string[] } };
+    if (membership.public_metadata?.roles?.includes("super_admin")) {
+      return new Response("Cannot delete a super admin account", { status: 400 });
+    }
   }
 
   const client = await clerkClient();

@@ -17,9 +17,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { useOrgId } from "@/lib/use-org-id";
 
 export default function PlayersPage() {
-  const players = useQuery(api.players.listMyPlayers);
+  const orgId = useOrgId();
+  const players = useQuery(api.players.listMyPlayers, orgId ? { orgId } : "skip");
   const deletePlayer = useMutation(api.players.deletePlayer);
   const [pendingDelete, setPendingDelete] = useState<{ id: Id<"players">; label: string } | null>(
     null
@@ -27,17 +29,17 @@ export default function PlayersPage() {
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
   async function confirmDelete() {
-    if (!pendingDelete) return;
+    if (!orgId || !pendingDelete) return;
     setDeleteSubmitting(true);
     try {
-      await deletePlayer({ playerId: pendingDelete.id });
+      await deletePlayer({ orgId, playerId: pendingDelete.id });
       setPendingDelete(null);
     } finally {
       setDeleteSubmitting(false);
     }
   }
 
-  if (players === undefined || players === null) {
+  if (!orgId || players === undefined || players === null) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <ArloLoader />
@@ -47,6 +49,29 @@ export default function PlayersPage() {
 
   return (
     <main className="flex flex-1 flex-col items-center py-12 px-4">
+      <div className="w-full max-w-4xl space-y-6 pb-16">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold">My Family</h1>
+          <Link href="/family/edit" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+            Edit Family
+          </Link>
+        </div>
+
+        {players.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
+              <p className="text-muted-foreground">You haven&apos;t added any family members yet.</p>
+              <Link href="/family/edit" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+                Edit Family
+              </Link>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          </div>
+        )}
+      </div>
+
       <div className="w-full max-w-4xl space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold">My Players</h1>

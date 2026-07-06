@@ -15,12 +15,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useOrgId } from "@/lib/use-org-id";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
 
 type GameRow = Doc<"games"> & { homeTeamName: string; awayTeamName: string; fieldName: string };
 
 function PayoutAccountCard() {
-  const account = useQuery(api.financials.getMyPayoutAccount);
+  const orgId = useOrgId();
+  const account = useQuery(api.financials.getMyPayoutAccount, orgId ? { orgId } : "skip");
   const startOnboarding = useAction(api.financialsActions.startOnboarding);
   const refreshMyPayoutStatus = useAction(api.financialsActions.refreshMyPayoutStatus);
   const createExpressDashboardLink = useAction(api.financialsActions.createExpressDashboardLink);
@@ -28,19 +30,20 @@ function PayoutAccountCard() {
   const [openingDashboard, setOpeningDashboard] = useState(false);
 
   useEffect(() => {
-    if (account?.stripeConnectId) {
-      refreshMyPayoutStatus();
+    if (orgId && account?.stripeConnectId) {
+      refreshMyPayoutStatus({ orgId });
     }
     // Only refresh once per mount (e.g. right after returning from Stripe onboarding).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [account?.stripeConnectId]);
+  }, [account?.stripeConnectId, orgId]);
 
-  if (account === undefined) return null;
+  if (!orgId || account === undefined) return null;
 
   async function handleConnect() {
+    if (!orgId) return;
     setConnecting(true);
     try {
-      const { url } = await startOnboarding({ returnUrl: `${window.location.origin}/referee` });
+      const { url } = await startOnboarding({ orgId, returnUrl: `${window.location.origin}/referee` });
       window.location.href = url;
     } finally {
       setConnecting(false);
@@ -48,9 +51,10 @@ function PayoutAccountCard() {
   }
 
   async function handleOpenDashboard() {
+    if (!orgId) return;
     setOpeningDashboard(true);
     try {
-      const { url } = await createExpressDashboardLink();
+      const { url } = await createExpressDashboardLink({ orgId });
       window.open(url, "_blank", "noopener,noreferrer");
     } finally {
       setOpeningDashboard(false);
@@ -95,7 +99,8 @@ function PayoutAccountCard() {
 type PayoutHistoryRow = Doc<"payoutLedger"> & { gameMatchup: string; gameStartTime?: number };
 
 function PayoutHistoryCard() {
-  const history = useQuery(api.financials.getMyPayoutHistory);
+  const orgId = useOrgId();
+  const history = useQuery(api.financials.getMyPayoutHistory, orgId ? { orgId } : "skip");
 
   if (!history || history.length === 0) return null;
 
@@ -131,7 +136,8 @@ function PayoutHistoryCard() {
 }
 
 export default function RefereeDashboardPage() {
-  const games = useQuery(api.games.listMyAssignedGames);
+  const orgId = useOrgId();
+  const games = useQuery(api.games.listMyAssignedGames, orgId ? { orgId } : "skip");
   const acceptGame = useMutation(api.games.acceptGame);
   const submitScore = useMutation(api.games.submitScore);
   const [acceptingId, setAcceptingId] = useState<Id<"games"> | null>(null);
@@ -142,7 +148,7 @@ export default function RefereeDashboardPage() {
   const [scoreSubmitting, setScoreSubmitting] = useState(false);
   const [scoreError, setScoreError] = useState<string | null>(null);
 
-  if (games === undefined) {
+  if (!orgId || games === undefined) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <ArloLoader />
@@ -155,9 +161,10 @@ export default function RefereeDashboardPage() {
     .sort((a, b) => a.startTime - b.startTime);
 
   async function handleAccept(gameId: Id<"games">) {
+    if (!orgId) return;
     setAcceptingId(gameId);
     try {
-      await acceptGame({ gameId });
+      await acceptGame({ orgId, gameId });
     } finally {
       setAcceptingId(null);
     }
@@ -171,11 +178,12 @@ export default function RefereeDashboardPage() {
   }
 
   async function handleSubmitScore() {
-    if (!scoringGame || homeScore === "" || awayScore === "") return;
+    if (!orgId || !scoringGame || homeScore === "" || awayScore === "") return;
     setScoreSubmitting(true);
     setScoreError(null);
     try {
       await submitScore({
+        orgId,
         gameId: scoringGame._id,
         homeScore: Number(homeScore),
         awayScore: Number(awayScore),

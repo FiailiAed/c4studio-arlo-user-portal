@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useOrgId } from "@/lib/use-org-id";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 
 type ColumnType = "text" | "number" | "date" | "boolean" | "select";
@@ -184,8 +185,9 @@ export default function AdminDataTablePage({
 }) {
   const { tableId } = use(params);
   const id = tableId as Id<"tableDefinitions">;
+  const orgId = useOrgId();
 
-  const result = useQuery(api.customTables.getTable, { tableId: id });
+  const result = useQuery(api.customTables.getTable, orgId ? { orgId, tableId: id } : "skip");
   const addColumn = useMutation(api.customTables.addColumn);
   const renameColumn = useMutation(api.customTables.renameColumn);
   const deleteColumn = useMutation(api.customTables.deleteColumn);
@@ -208,7 +210,7 @@ export default function AdminDataTablePage({
   const [recordForm, setRecordForm] = useState<Record<string, FieldValue>>({});
   const [recordSubmitting, setRecordSubmitting] = useState(false);
 
-  if (result === undefined) {
+  if (!orgId || result === undefined) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <ArloLoader />
@@ -232,19 +234,21 @@ export default function AdminDataTablePage({
   }
 
   async function commitRename(key: string) {
+    if (!orgId) return;
     const label = renameDrafts[key];
     if (label === undefined) return;
     const trimmed = label.trim();
     const current = columns.find((c) => c.key === key);
     if (!trimmed || trimmed === current?.label) return;
-    await renameColumn({ tableId: id, key, label: trimmed });
+    await renameColumn({ orgId, tableId: id, key, label: trimmed });
   }
 
   async function handleAddColumn() {
-    if (!newColumnLabel.trim()) return;
+    if (!orgId || !newColumnLabel.trim()) return;
     setAddingColumn(true);
     try {
       await addColumn({
+        orgId,
         tableId: id,
         label: newColumnLabel.trim(),
         type: newColumnType,
@@ -277,6 +281,7 @@ export default function AdminDataTablePage({
   }
 
   async function submitRecord() {
+    if (!orgId) return;
     setRecordSubmitting(true);
     try {
       const data: Record<string, FieldValue> = {};
@@ -285,9 +290,9 @@ export default function AdminDataTablePage({
       }
 
       if (editingRecordId) {
-        await updateRecord({ recordId: editingRecordId, data });
+        await updateRecord({ orgId, recordId: editingRecordId, data });
       } else {
-        await addRecord({ tableId: id, data });
+        await addRecord({ orgId, tableId: id, data });
       }
       setRecordDialogOpen(false);
     } finally {
@@ -296,13 +301,13 @@ export default function AdminDataTablePage({
   }
 
   async function confirmPendingDelete() {
-    if (!pendingDelete) return;
+    if (!orgId || !pendingDelete) return;
     setDeleteSubmitting(true);
     try {
       if (pendingDelete.kind === "column") {
-        await deleteColumn({ tableId: id, key: pendingDelete.key });
+        await deleteColumn({ orgId, tableId: id, key: pendingDelete.key });
       } else {
-        await deleteRecord({ recordId: pendingDelete.recordId });
+        await deleteRecord({ orgId, recordId: pendingDelete.recordId });
       }
       setPendingDelete(null);
     } finally {

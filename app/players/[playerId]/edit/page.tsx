@@ -7,6 +7,7 @@ import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { ArloLoader } from "@/components/ui/arlo-loader";
 import { PlayerForm, type PlayerFormValues } from "@/components/players/player-form";
+import { useOrgId } from "@/lib/use-org-id";
 
 interface EditPlayerPageProps {
   params: Promise<{ playerId: string }>;
@@ -15,7 +16,8 @@ interface EditPlayerPageProps {
 export default function EditPlayerPage({ params }: EditPlayerPageProps) {
   const { playerId } = use(params);
   const router = useRouter();
-  const players = useQuery(api.players.listMyPlayers);
+  const orgId = useOrgId();
+  const players = useQuery(api.players.listMyPlayers, orgId ? { orgId } : "skip");
   const updatePlayer = useMutation(api.players.updatePlayer);
 
   const player = players?.find((p) => p._id === playerId);
@@ -26,7 +28,7 @@ export default function EditPlayerPage({ params }: EditPlayerPageProps) {
     }
   }, [players, player, router]);
 
-  if (players === undefined || players === null || !player) {
+  if (!orgId || players === undefined || players === null || !player) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <ArloLoader />
@@ -35,7 +37,8 @@ export default function EditPlayerPage({ params }: EditPlayerPageProps) {
   }
 
   const handleSubmit = async (values: PlayerFormValues) => {
-    await updatePlayer({ playerId: playerId as Id<"players">, ...values });
+    if (!orgId) return;
+    await updatePlayer({ orgId, playerId: playerId as Id<"players">, ...values });
     router.push("/players");
   };
 

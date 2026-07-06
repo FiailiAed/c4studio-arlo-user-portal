@@ -21,18 +21,20 @@ import {
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { getRoleConfig, hasAnyRole, type AppRole } from "@/lib/roles";
+import { useOrgId } from "@/lib/use-org-id";
 import type { Doc } from "../../../convex/_generated/dataModel";
 
 const ROLES: AppRole[] = ["family", "referee", "program_admin", "coach", "league_admin", "super_admin"];
 
-type AdminUser = Doc<"users">;
+type AdminUser = Doc<"users"> & { roles: string[] };
 
 export default function AdminUsersPage() {
   const { user: currentUser } = useUser();
   const clerk = useClerk();
-  const users = useQuery(api.users.listAll);
-  const myProfile = useQuery(api.users.getCurrentUser);
-  const myRoles = myProfile?.roles as AppRole[] | undefined;
+  const orgId = useOrgId();
+  const users = useQuery(api.users.listAll, orgId ? { orgId } : "skip");
+  const myRolesResult = useQuery(api.orgMemberships.getMyRoles, orgId ? { orgId } : "skip");
+  const myRoles = (myRolesResult ?? undefined) as AppRole[] | undefined;
   const [optimisticRoles, setOptimisticRoles] = useState<Record<string, AppRole[]>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -56,6 +58,7 @@ export default function AdminUsersPage() {
   }, [users, search]);
 
   async function applyRoles(clerkIds: string[], roles: AppRole[]) {
+    if (!orgId) return false;
     setOptimisticRoles((prev) => {
       const next = { ...prev };
       for (const id of clerkIds) next[id] = roles;
@@ -70,7 +73,7 @@ export default function AdminUsersPage() {
     const res = await fetch("/api/users/role", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userIds: clerkIds, roles }),
+      body: JSON.stringify({ orgId, userIds: clerkIds, roles }),
     });
 
     if (!res.ok) {
