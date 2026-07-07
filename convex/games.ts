@@ -37,22 +37,16 @@ async function assertNoFieldConflict(
 export const listGames = query({
   args: {
     orgId: v.string(),
-    from: v.optional(v.number()),
-    to: v.optional(v.number()),
+    seasonId: v.id("seasons"),
   },
   handler: async (ctx, args) => {
     const identity = await requireLeagueAdminQuery(ctx, args.orgId);
     if (!identity) return null;
 
-    const allGames = await ctx.db
+    const games = await ctx.db
       .query("games")
-      .withIndex("by_org_and_start_time", (q) => q.eq("orgId", args.orgId))
+      .withIndex("by_org_and_season", (q) => q.eq("orgId", args.orgId).eq("seasonId", args.seasonId))
       .collect();
-    const games = allGames.filter(
-      (game) =>
-        (args.from === undefined || game.startTime >= args.from) &&
-        (args.to === undefined || game.startTime <= args.to)
-    );
 
     const results = [];
     for (const game of games) {
@@ -82,6 +76,7 @@ export const listGames = query({
 export const createGame = mutation({
   args: {
     orgId: v.string(),
+    seasonId: v.id("seasons"),
     homeTeamId: v.id("teams"),
     awayTeamId: v.id("teams"),
     fieldId: v.id("fields"),
@@ -90,10 +85,14 @@ export const createGame = mutation({
   handler: async (ctx, args) => {
     const identity = await requireLeagueAdminMutation(ctx, args.orgId);
 
+    const season = await ctx.db.get(args.seasonId);
+    if (!season || season.orgId !== args.orgId) throw new Error("Season not found in this org");
+
     await assertNoFieldConflict(ctx, args.orgId, args.fieldId, args.startTime);
 
     return await ctx.db.insert("games", {
       orgId: args.orgId,
+      seasonId: args.seasonId,
       homeTeamId: args.homeTeamId,
       awayTeamId: args.awayTeamId,
       fieldId: args.fieldId,

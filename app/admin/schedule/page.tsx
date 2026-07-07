@@ -18,6 +18,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useOrgId } from "@/lib/use-org-id";
+import { useCurrentSeason } from "@/lib/use-current-season";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 
 type GameStatus = Doc<"games">["status"];
@@ -48,7 +49,14 @@ function toDatetimeLocalValue(ms: number): string {
 
 export default function AdminSchedulePage() {
   const orgId = useOrgId();
-  const games = useQuery(api.games.listGames, orgId ? { orgId } : "skip");
+  const seasons = useQuery(api.seasons.listSeasons, orgId ? { orgId } : "skip");
+  const currentSeason = useCurrentSeason(orgId);
+  const [selectedSeasonId, setSelectedSeasonId] = useState<string>("");
+  const effectiveSeasonId = selectedSeasonId || currentSeason?._id;
+  const games = useQuery(
+    api.games.listGames,
+    orgId && effectiveSeasonId ? { orgId, seasonId: effectiveSeasonId as Id<"seasons"> } : "skip"
+  );
   const teams = useQuery(api.teams.listTeams, orgId ? { orgId } : "skip");
   const fields = useQuery(api.fields.listFields, orgId ? { orgId } : "skip");
 
@@ -83,7 +91,7 @@ export default function AdminSchedulePage() {
     orgId && assigningGame ? { orgId, gameId: assigningGame._id } : "skip"
   );
 
-  if (!orgId || games === undefined || teams === undefined || fields === undefined) {
+  if (!orgId || seasons === undefined || seasons === null || teams === undefined || fields === undefined) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <ArloLoader />
@@ -100,7 +108,7 @@ export default function AdminSchedulePage() {
   }
 
   async function handleCreate() {
-    if (!orgId || !homeTeamId || !awayTeamId || !fieldId || !startTime) return;
+    if (!orgId || !effectiveSeasonId || !homeTeamId || !awayTeamId || !fieldId || !startTime) return;
     if (homeTeamId === awayTeamId) {
       setError("Home and away team must be different");
       return;
@@ -110,6 +118,7 @@ export default function AdminSchedulePage() {
     try {
       await createGame({
         orgId,
+        seasonId: effectiveSeasonId as Id<"seasons">,
         homeTeamId: homeTeamId as Id<"teams">,
         awayTeamId: awayTeamId as Id<"teams">,
         fieldId: fieldId as Id<"fields">,
@@ -211,7 +220,21 @@ export default function AdminSchedulePage() {
       <div className="w-full max-w-5xl space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold">Game Schedule</h1>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            {seasons.length > 0 && (
+              <select
+                value={effectiveSeasonId ?? ""}
+                onChange={(e) => setSelectedSeasonId(e.target.value)}
+                className={cn(SELECT_CLASSNAME)}
+              >
+                {seasons.map((s) => (
+                  <option key={s._id} value={s._id}>{s.name}</option>
+                ))}
+              </select>
+            )}
+            <Link href="/admin/seasons" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+              Manage Seasons
+            </Link>
             <Link href="/admin/schedule/fields" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
               Manage Fields
             </Link>
@@ -221,12 +244,19 @@ export default function AdminSchedulePage() {
             <Button
               size="sm"
               onClick={() => setCreateOpen(true)}
-              disabled={teams === null || fields === null || teams.length === 0 || fields.length === 0}
+              disabled={!effectiveSeasonId || teams === null || fields === null || teams.length === 0 || fields.length === 0}
             >
               New Game
             </Button>
           </div>
         </div>
+
+        {seasons.length === 0 && (
+          <p className="text-sm text-muted-foreground">
+            <Link href="/admin/seasons" className="underline underline-offset-4">Create a season</Link> before
+            scheduling games.
+          </p>
+        )}
 
         {(teams === null || fields === null || teams.length === 0 || fields.length === 0) && (
           <p className="text-sm text-muted-foreground">

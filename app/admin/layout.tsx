@@ -13,6 +13,7 @@ const ADMIN_NAV = [
   { href: "/admin/invite", label: "Invite" },
   { href: "/admin/data", label: "Data" },
   { href: "/admin/schedule", label: "Schedule" },
+  { href: "/admin/seasons", label: "Seasons" },
   { href: "/admin/clubs", label: "Clubs" },
   { href: "/admin/financials", label: "Financials" },
   { href: "/admin/exceptions", label: "Exceptions" },

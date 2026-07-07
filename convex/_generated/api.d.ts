@@ -20,6 +20,7 @@ import type * as games from "../games.js";
 import type * as http from "../http.js";
 import type * as impersonation from "../impersonation.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as migrations_backfillDefaultSeason from "../migrations/backfillDefaultSeason.js";
 import type * as orgMemberships from "../orgMemberships.js";
 import type * as orgUnits from "../orgUnits.js";
 import type * as organizations from "../organizations.js";
@@ -27,6 +28,7 @@ import type * as players from "../players.js";
 import type * as referees from "../referees.js";
 import type * as residency from "../residency.js";
 import type * as rosters from "../rosters.js";
+import type * as seasons from "../seasons.js";
 import type * as teams from "../teams.js";
 import type * as users from "../users.js";
 
@@ -49,6 +51,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   impersonation: typeof impersonation;
   "lib/auth": typeof lib_auth;
+  "migrations/backfillDefaultSeason": typeof migrations_backfillDefaultSeason;
   orgMemberships: typeof orgMemberships;
   orgUnits: typeof orgUnits;
   organizations: typeof organizations;
@@ -56,6 +59,7 @@ declare const fullApi: ApiFromModules<{
   referees: typeof referees;
   residency: typeof residency;
   rosters: typeof rosters;
+  seasons: typeof seasons;
   teams: typeof teams;
   users: typeof users;
 }>;

@@ -123,8 +123,19 @@ export default defineSchema({
     .index("by_club", ["clubId"])
     .index("by_org", ["orgId"]),
 
+  seasons: defineTable({
+    orgId: v.string(),
+    name: v.string(), // e.g. "Spring 2026"
+    startDate: v.number(), // unix ms
+    endDate: v.number(),
+  }).index("by_org", ["orgId"]),
+
   games: defineTable({
     orgId: v.string(),
+    // Optional at the schema level (existing rows predate this field) —
+    // createGame requires it going forward; existing rows are backfilled
+    // into one default season per org via a one-time migration.
+    seasonId: v.optional(v.id("seasons")),
     homeTeamId: v.id("teams"),
     awayTeamId: v.id("teams"),
     fieldId: v.id("fields"),
@@ -146,7 +157,8 @@ export default defineSchema({
   })
     .index("by_referee", ["refereeId"])
     .index("by_org_and_start_time", ["orgId", "startTime"])
-    .index("by_org_and_field_and_time", ["orgId", "fieldId", "startTime"]),
+    .index("by_org_and_field_and_time", ["orgId", "fieldId", "startTime"])
+    .index("by_org_and_season", ["orgId", "seasonId"]),
 
   refereeProfiles: defineTable({
     orgId: v.optional(v.string()),

@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { cn } from "@/lib/utils";
 import { getRoleConfig, type AppRole } from "@/lib/roles";
 import { useOrgId } from "@/lib/use-org-id";
+import { useCurrentSeason } from "@/lib/use-current-season";
 
 export default function AdminPage() {
   return (
@@ -50,7 +51,11 @@ const ALERT_WINDOW_MS = 48 * 60 * 60 * 1000;
 
 function ArloAlertCard() {
   const orgId = useOrgId();
-  const games = useQuery(api.games.listGames, orgId ? { orgId } : "skip");
+  const currentSeason = useCurrentSeason(orgId);
+  const games = useQuery(
+    api.games.listGames,
+    orgId && currentSeason ? { orgId, seasonId: currentSeason._id } : "skip"
+  );
   const [now] = useState(() => Date.now());
 
   if (!games) return null;
