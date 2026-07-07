@@ -1,13 +1,14 @@
 "use client";
 
-import { useQuery } from "convex/react";
+import { useState } from "react";
+import { useAction, useQuery } from "convex/react";
 import { useUser } from "@clerk/nextjs";
 import Link from "next/link";
 import { api } from "../../convex/_generated/api";
 import { ArloLoader } from "@/components/ui/arlo-loader";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
@@ -19,6 +20,24 @@ export default function UserPage() {
   const profile = useQuery(api.users.getCurrentUser);
   const { activeOrgId, activeOrg, memberships } = useActiveOrg();
   const orgRoles = useQuery(api.orgMemberships.getMyRoles, activeOrgId ? { orgId: activeOrgId } : "skip");
+  const resolveMyDistrict = useAction(api.residency.resolveMyDistrict);
+  const [resolving, setResolving] = useState(false);
+  const [resolveError, setResolveError] = useState<string | null>(null);
+  const [resolveSuccess, setResolveSuccess] = useState(false);
+
+  async function handleResolveDistrict() {
+    setResolving(true);
+    setResolveError(null);
+    setResolveSuccess(false);
+    try {
+      await resolveMyDistrict({});
+      setResolveSuccess(true);
+    } catch (e) {
+      setResolveError(e instanceof Error ? e.message : "Failed to resolve district");
+    } finally {
+      setResolving(false);
+    }
+  }
 
   if (profile === undefined || memberships === undefined) {
     return (
@@ -95,6 +114,51 @@ export default function UserPage() {
                   </>
                 )}
               </dl>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Residency card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Residency</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 text-sm">
+            {profile?.resolvedDistrict ? (
+              <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-3">
+                <dt className="text-muted-foreground">District</dt>
+                <dd>{profile.resolvedDistrict.districtName}</dd>
+                {profile.resolvedDistrict.county && (
+                  <>
+                    <dt className="text-muted-foreground">County</dt>
+                    <dd>{profile.resolvedDistrict.county}</dd>
+                  </>
+                )}
+                <dt className="text-muted-foreground">Resolved</dt>
+                <dd>{new Date(profile.resolvedDistrict.resolvedAt).toLocaleDateString()}</dd>
+              </dl>
+            ) : (
+              <p className="text-muted-foreground">
+                Resolve your district to be eligible for roster placement.
+              </p>
+            )}
+
+            {!profile?.address ? (
+              <p className="text-muted-foreground">
+                Add your address before resolving your district.{" "}
+                <Link href="/user/edit" className="underline underline-offset-4">
+                  Complete your profile
+                </Link>
+              </p>
+            ) : (
+              <Button size="sm" onClick={handleResolveDistrict} disabled={resolving}>
+                {resolving ? "Resolving…" : profile?.resolvedDistrict ? "Re-check" : "Resolve my district"}
+              </Button>
+            )}
+
+            {resolveError && <p className="text-sm text-destructive">{resolveError}</p>}
+            {resolveSuccess && !resolveError && (
+              <p className="text-sm text-emerald-600">District resolved successfully.</p>
             )}
           </CardContent>
         </Card>

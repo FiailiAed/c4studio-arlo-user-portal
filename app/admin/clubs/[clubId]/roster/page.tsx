@@ -24,6 +24,15 @@ function playerLabel(player: Doc<"players">) {
   return `${player.firstName} ${player.lastName}`;
 }
 
+const RESIDENCY_ERROR_MESSAGES: Record<string, string> = {
+  DISTRICT_NOT_RESOLVED:
+    "This player's family hasn't resolved their school district yet. Ask them to do so from their profile page before adding them to a roster.",
+  DISTRICT_UNMAPPED:
+    "This player's resolved district isn't mapped to an org unit yet. Map it under Admin → Residency, or override below.",
+  DISTRICT_MISMATCH:
+    "This player's resolved district maps to a different org unit than this team. Override below if this is intentional.",
+};
+
 function TeamRosterSection({ team }: { team: Doc<"teams"> }) {
   const { activeOrgId } = useActiveOrg();
   const roster = useQuery(api.rosters.listRosterForTeam, { teamId: team._id });
@@ -38,6 +47,8 @@ function TeamRosterSection({ team }: { team: Doc<"teams"> }) {
   const [search, setSearch] = useState("");
   const [addSubmitting, setAddSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [overridePlayerId, setOverridePlayerId] = useState<Id<"players"> | null>(null);
+  const [overrideReason, setOverrideReason] = useState("");
 
   const rosteredPlayerIds = new Set((roster ?? []).map((r) => r.playerId));
   const query = search.trim().toLowerCase();
@@ -45,16 +56,43 @@ function TeamRosterSection({ team }: { team: Doc<"teams"> }) {
     (p) => !rosteredPlayerIds.has(p._id) && (!query || playerLabel(p).toLowerCase().includes(query))
   );
 
-  async function handleAdd(playerId: Id<"players">) {
+  function resetAddState() {
+    setError(null);
+    setOverridePlayerId(null);
+    setOverrideReason("");
+  }
+
+  async function handleAdd(playerId: Id<"players">, overrideReasonForThisAdd?: string) {
     setAddSubmitting(true);
     setError(null);
     try {
-      await addToRoster({ teamId: team._id, playerId });
+      await addToRoster({
+        teamId: team._id,
+        playerId,
+        overrideReason: overrideReasonForThisAdd,
+      });
+      setOverridePlayerId(null);
+      setOverrideReason("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to add player");
+      const message = e instanceof Error ? e.message : "Failed to add player";
+      const residencyMessage = RESIDENCY_ERROR_MESSAGES[message];
+      if (residencyMessage) {
+        setError(residencyMessage);
+        // Only unresolved-district has no override path — nothing exists yet
+        // to override. Unmapped/mismatch both allow a league_admin override.
+        setOverridePlayerId(message === "DISTRICT_NOT_RESOLVED" ? null : playerId);
+      } else {
+        setError(message);
+        setOverridePlayerId(null);
+      }
     } finally {
       setAddSubmitting(false);
     }
+  }
+
+  async function handleOverrideAdd() {
+    if (!overridePlayerId || !overrideReason.trim()) return;
+    await handleAdd(overridePlayerId, overrideReason.trim());
   }
 
   const columns: DataTableColumn<RosterRow>[] = [
@@ -84,7 +122,7 @@ function TeamRosterSection({ team }: { team: Doc<"teams"> }) {
         />
       </CardContent>
 
-      <Dialog open={addOpen} onOpenChange={(open) => { setAddOpen(open); if (!open) { setSearch(""); setError(null); } }}>
+      <Dialog open={addOpen} onOpenChange={(open) => { setAddOpen(open); if (!open) { setSearch(""); resetAddState(); } }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add Player to {team.name}</DialogTitle>
@@ -114,6 +152,24 @@ function TeamRosterSection({ team }: { team: Doc<"teams"> }) {
                 ))
               )}
             </div>
+            {overridePlayerId && (
+              <div className="space-y-2 rounded-md border border-destructive/50 bg-destructive/5 p-3">
+                <p className="text-sm font-medium">Override reason required</p>
+                <Input
+                  placeholder="Reason for override…"
+                  value={overrideReason}
+                  onChange={(e) => setOverrideReason(e.target.value)}
+                />
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  disabled={addSubmitting || !overrideReason.trim()}
+                  onClick={handleOverrideAdd}
+                >
+                  {addSubmitting ? "Adding…" : "Override & Add"}
+                </Button>
+              </div>
+            )}
             {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
           <DialogFooter>

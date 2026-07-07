@@ -11,6 +11,7 @@ const ADMIN_NAV = [
   { href: "/admin", label: "Dashboard" },
   { href: "/admin/organizations", label: "Organizations" },
   { href: "/admin/org-units", label: "Org Hierarchy" },
+  { href: "/admin/residency", label: "Residency" },
   { href: "/admin/users", label: "Users" },
   { href: "/admin/invite", label: "Invite" },
   { href: "/admin/data", label: "Data" },
