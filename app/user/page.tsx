@@ -1,13 +1,14 @@
 "use client";
 
-import { useQuery } from "convex/react";
+import { useQuery, useAction } from "convex/react";
 import { useUser } from "@clerk/nextjs";
 import Link from "next/link";
+import { useState } from "react";
 import { api } from "../../convex/_generated/api";
 import { ArloLoader } from "@/components/ui/arlo-loader";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
@@ -19,6 +20,23 @@ export default function UserPage() {
   const orgId = useOrgId();
   const profile = useQuery(api.users.getCurrentUser);
   const myRoles = useQuery(api.orgMemberships.getMyRoles, orgId ? { orgId } : "skip");
+  const residency = useQuery(api.residency.getMyResidency);
+  const resolveMyDistrict = useAction(api.residency.resolveMyDistrict);
+  const [resolving, setResolving] = useState(false);
+  const [resolveError, setResolveError] = useState<string | null>(null);
+
+  async function handleReResolve() {
+    if (!orgId) return;
+    setResolving(true);
+    setResolveError(null);
+    try {
+      await resolveMyDistrict({ orgId });
+    } catch (e) {
+      setResolveError(e instanceof Error ? e.message : "Failed to resolve district");
+    } finally {
+      setResolving(false);
+    }
+  }
 
   if (!orgId || profile === undefined || myRoles === undefined) {
     return (
@@ -98,6 +116,37 @@ export default function UserPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Sending district card */}
+        {profile?.address && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base">Sending District</CardTitle>
+              <Button size="sm" variant="outline" onClick={handleReResolve} disabled={resolving}>
+                {resolving ? "Resolving…" : "Re-resolve"}
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              {residency ? (
+                <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2">
+                  <dt className="text-muted-foreground">District</dt>
+                  <dd>{residency.districtName}</dd>
+                  {residency.county && (
+                    <>
+                      <dt className="text-muted-foreground">County</dt>
+                      <dd>{residency.county}</dd>
+                    </>
+                  )}
+                </dl>
+              ) : (
+                <p className="text-muted-foreground">
+                  Not resolved yet — click Re-resolve to look it up from your address.
+                </p>
+              )}
+              {resolveError && <p className="text-destructive">{resolveError}</p>}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Permissions card */}
         <Card>

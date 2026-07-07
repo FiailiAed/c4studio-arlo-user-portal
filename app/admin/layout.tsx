@@ -18,6 +18,7 @@ const ADMIN_NAV = [
   { href: "/admin/exceptions", label: "Exceptions" },
   { href: "/admin/settings/documents", label: "Documents" },
   { href: "/admin/org-units", label: "Org Structure" },
+  { href: "/admin/residency", label: "Residency" },
   { href: "/admin/organizations", label: "Organizations" },
 ] as const;
 

@@ -17,6 +17,15 @@ export default defineSchema({
         zip: v.string(),
       })
     ),
+    // Cached resolution of `address` to a US Census school sending-district —
+    // one person, one address, one resolved district, not org-scoped.
+    residency: v.optional(
+      v.object({
+        districtName: v.string(),
+        county: v.optional(v.string()),
+        resolvedAt: v.number(),
+      })
+    ),
   }).index("by_clerk_id", ["clerkId"]),
 
   // Multi-tenancy: one row per Clerk Organization. `clerkOrgId` is the
@@ -161,10 +170,34 @@ export default defineSchema({
     orgId: v.string(),
     teamId: v.id("teams"),
     playerId: v.id("players"),
+    // Set only when a league_admin overrode a residency-district mismatch —
+    // the audit trail for that escape hatch.
+    residencyOverrideReason: v.optional(v.string()),
   })
     .index("by_team", ["teamId"])
     .index("by_player", ["playerId"])
     .index("by_org_and_team", ["orgId", "teamId"]),
+
+  // Per-org mapping from a Census school-district name to the org unit that
+  // covers it. `municipality` disambiguates regional districts that serve
+  // multiple towns mapped to different clubs — a row with no municipality is
+  // the default/direct mapping for that district.
+  districtMappings: defineTable({
+    orgId: v.string(),
+    districtName: v.string(),
+    municipality: v.optional(v.string()),
+    orgUnitId: v.id("orgUnits"),
+  }).index("by_org_and_district", ["orgId", "districtName"]),
+
+  // Logs a resolved-but-unmapped district encounter so admins have something
+  // concrete to review, rather than a silent one-off failure per family.
+  unmappedDistrictReports: defineTable({
+    orgId: v.string(),
+    districtName: v.string(),
+    county: v.optional(v.string()),
+    clerkId: v.string(),
+    reportedAt: v.number(),
+  }).index("by_org_and_district", ["orgId", "districtName"]),
 
   leagueSettings: defineTable({
     orgId: v.string(),

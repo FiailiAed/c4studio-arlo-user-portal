@@ -62,7 +62,7 @@ export const renameOrgUnit = mutation({
   },
 });
 
-async function isDescendant(
+export async function isDescendant(
   ctx: { db: { get: (id: Id<"orgUnits">) => Promise<{ parentUnitId?: Id<"orgUnits"> } | null> } },
   candidateId: Id<"orgUnits">,
   ancestorId: Id<"orgUnits">
@@ -73,6 +73,16 @@ async function isDescendant(
     current = await ctx.db.get(current.parentUnitId);
   }
   return false;
+}
+
+/** True if `nodeId` is `ancestorId` itself, or nested anywhere under it. */
+export async function isSameOrDescendant(
+  ctx: { db: { get: (id: Id<"orgUnits">) => Promise<{ parentUnitId?: Id<"orgUnits"> } | null> } },
+  nodeId: Id<"orgUnits">,
+  ancestorId: Id<"orgUnits">
+): Promise<boolean> {
+  if (nodeId === ancestorId) return true;
+  return isDescendant(ctx, nodeId, ancestorId);
 }
 
 export const moveOrgUnit = mutation({

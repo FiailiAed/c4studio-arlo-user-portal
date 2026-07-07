@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "../../../convex/_generated/api";
@@ -11,11 +11,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useOrgId } from "@/lib/use-org-id";
 
 export default function EditProfilePage() {
   const router = useRouter();
+  const orgId = useOrgId();
   const profile = useQuery(api.users.getCurrentUser);
   const updateProfile = useMutation(api.users.updateProfile);
+  const resolveMyDistrict = useAction(api.residency.resolveMyDistrict);
 
   const [form, setForm] = useState({
     phone: "",
@@ -61,6 +64,12 @@ export default function EditProfilePage() {
             }
           : undefined,
       });
+      if (hasAddress && orgId) {
+        // Fire-and-forget: a failed resolve (bad address, geocoder hiccup)
+        // shouldn't block the profile save itself. The user can retry from
+        // /user's "Re-resolve" button.
+        resolveMyDistrict({ orgId }).catch(() => {});
+      }
       router.push("/user");
     } finally {
       setSaving(false);

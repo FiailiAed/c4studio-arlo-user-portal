@@ -34,6 +34,8 @@ function TeamRosterSection({ orgId, team }: { orgId: string; team: Doc<"teams"> 
   const [search, setSearch] = useState("");
   const [addSubmitting, setAddSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [outsideDistrictPlayer, setOutsideDistrictPlayer] = useState<Doc<"players"> | null>(null);
+  const [overrideReason, setOverrideReason] = useState("");
 
   const rosteredPlayerIds = new Set((roster ?? []).map((r) => r.playerId));
   const query = search.trim().toLowerCase();
@@ -41,13 +43,22 @@ function TeamRosterSection({ orgId, team }: { orgId: string; team: Doc<"teams"> 
     (p) => !rosteredPlayerIds.has(p._id) && (!query || playerLabel(p).toLowerCase().includes(query))
   );
 
-  async function handleAdd(playerId: Id<"players">) {
+  async function handleAdd(playerId: Id<"players">, overrideReasonArg?: string) {
     setAddSubmitting(true);
     setError(null);
     try {
-      await addToRoster({ orgId, teamId: team._id, playerId });
+      await addToRoster({ orgId, teamId: team._id, playerId, overrideReason: overrideReasonArg });
+      setOutsideDistrictPlayer(null);
+      setOverrideReason("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to add player");
+      const message = e instanceof Error ? e.message : "Failed to add player";
+      if (message.startsWith("OUTSIDE_DISTRICT")) {
+        const player = candidates.find((p) => p._id === playerId) ?? null;
+        setOutsideDistrictPlayer(player);
+        setOverrideReason("");
+      } else {
+        setError(message);
+      }
     } finally {
       setAddSubmitting(false);
     }
@@ -80,7 +91,18 @@ function TeamRosterSection({ orgId, team }: { orgId: string; team: Doc<"teams"> 
         />
       </CardContent>
 
-      <Dialog open={addOpen} onOpenChange={(open) => { setAddOpen(open); if (!open) { setSearch(""); setError(null); } }}>
+      <Dialog
+        open={addOpen}
+        onOpenChange={(open) => {
+          setAddOpen(open);
+          if (!open) {
+            setSearch("");
+            setError(null);
+            setOutsideDistrictPlayer(null);
+            setOverrideReason("");
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add Player to {team.name}</DialogTitle>
@@ -111,6 +133,27 @@ function TeamRosterSection({ orgId, team }: { orgId: string; team: Doc<"teams"> 
               )}
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
+            {outsideDistrictPlayer && (
+              <div className="space-y-2 rounded-md border border-destructive/50 p-3">
+                <p className="text-sm text-destructive">
+                  {playerLabel(outsideDistrictPlayer)}&apos;s resolved district doesn&apos;t cover this team.
+                  Provide a reason to add them anyway.
+                </p>
+                <Input
+                  value={overrideReason}
+                  onChange={(e) => setOverrideReason(e.target.value)}
+                  placeholder="e.g. Sibling already on this team"
+                />
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  disabled={addSubmitting || !overrideReason.trim()}
+                  onClick={() => handleAdd(outsideDistrictPlayer._id, overrideReason.trim())}
+                >
+                  {addSubmitting ? "Adding…" : "Add Anyway"}
+                </Button>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddOpen(false)}>

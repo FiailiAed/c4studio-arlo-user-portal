@@ -25,6 +25,7 @@ import type * as orgUnits from "../orgUnits.js";
 import type * as organizations from "../organizations.js";
 import type * as players from "../players.js";
 import type * as referees from "../referees.js";
+import type * as residency from "../residency.js";
 import type * as rosters from "../rosters.js";
 import type * as teams from "../teams.js";
 import type * as users from "../users.js";
@@ -53,6 +54,7 @@ declare const fullApi: ApiFromModules<{
   organizations: typeof organizations;
   players: typeof players;
   referees: typeof referees;
+  residency: typeof residency;
   rosters: typeof rosters;
   teams: typeof teams;
   users: typeof users;
