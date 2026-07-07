@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { requireLeagueAdminMutation, requireLeagueAdminQuery } from "./lib/auth";
+import { checkRosterEligibility } from "./residency";
 
 export const listRosterForTeam = query({
   args: { teamId: v.id("teams") },
@@ -30,12 +31,16 @@ export const addToRoster = mutation({
   args: {
     teamId: v.id("teams"),
     playerId: v.id("players"),
+    // The league_admin escape hatch: if a residency check would otherwise
+    // block this add, a non-empty reason here overrides it. Stored on the
+    // roster row as an audit trail.
+    overrideReason: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const team = await ctx.db.get(args.teamId);
     if (!team) throw new Error("Team not found");
 
-    await requireLeagueAdminMutation(ctx, team.orgId);
+    const identity = await requireLeagueAdminMutation(ctx, team.orgId);
 
     const player = await ctx.db.get(args.playerId);
     if (!player || player.orgId !== team.orgId) throw new Error("Player not found");
@@ -46,6 +51,33 @@ export const addToRoster = mutation({
       .collect();
     if (existing.some((r) => r.playerId === args.playerId)) {
       throw new Error("Player is already on this team's roster");
+    }
+
+    // A team with no orgUnitId (legacy, pre-org-hierarchy row) has no
+    // position to compare a resolved district against — the residency
+    // check only activates once a team has been placed in the hierarchy.
+    if (team.orgUnitId) {
+      const eligibility = await checkRosterEligibility(ctx, {
+        orgId: team.orgId,
+        guardianClerkId: player.guardianClerkId,
+        teamOrgUnitId: team.orgUnitId,
+      });
+
+      if (eligibility.status !== "match") {
+        const reason = args.overrideReason?.trim();
+        if (!reason) {
+          if (eligibility.status === "not_resolved") throw new Error("DISTRICT_NOT_RESOLVED");
+          if (eligibility.status === "unmapped") throw new Error("DISTRICT_UNMAPPED");
+          throw new Error("DISTRICT_MISMATCH");
+        }
+        return await ctx.db.insert("rosters", {
+          orgId: team.orgId,
+          teamId: args.teamId,
+          playerId: args.playerId,
+          overrideReason: reason,
+          overriddenByClerkId: identity.subject,
+        });
+      }
     }
 
     return await ctx.db.insert("rosters", { orgId: team.orgId, teamId: args.teamId, playerId: args.playerId });

@@ -20,6 +20,7 @@ export const createTeam = mutation({
     orgId: v.id("organizations"),
     name: v.string(),
     clubId: v.optional(v.id("clubs")),
+    orgUnitId: v.id("orgUnits"),
   },
   handler: async (ctx, args) => {
     await requireLeagueAdminMutation(ctx, args.orgId);
@@ -29,7 +30,31 @@ export const createTeam = mutation({
       if (!club || club.orgId !== args.orgId) throw new Error("Club not found");
     }
 
-    return await ctx.db.insert("teams", { orgId: args.orgId, name: args.name, clubId: args.clubId });
+    const orgUnit = await ctx.db.get(args.orgUnitId);
+    if (!orgUnit || orgUnit.orgId !== args.orgId) throw new Error("Org unit not found");
+
+    return await ctx.db.insert("teams", {
+      orgId: args.orgId,
+      name: args.name,
+      clubId: args.clubId,
+      orgUnitId: args.orgUnitId,
+    });
+  },
+});
+
+/** Places (or reassigns) an existing team within the org hierarchy. */
+export const assignTeamOrgUnit = mutation({
+  args: { teamId: v.id("teams"), orgUnitId: v.id("orgUnits") },
+  handler: async (ctx, args) => {
+    const team = await ctx.db.get(args.teamId);
+    if (!team) throw new Error("Team not found");
+
+    await requireLeagueAdminMutation(ctx, team.orgId);
+
+    const orgUnit = await ctx.db.get(args.orgUnitId);
+    if (!orgUnit || orgUnit.orgId !== team.orgId) throw new Error("Org unit not found");
+
+    await ctx.db.patch(args.teamId, { orgUnitId: args.orgUnitId });
   },
 });
 

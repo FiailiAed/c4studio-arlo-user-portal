@@ -19,6 +19,16 @@ export default defineSchema({
         zip: v.string(),
       })
     ),
+    // Person-level cache (one guardian, one address, one resolved school
+    // district) — deliberately not org-scoped, geocoded from `address` via
+    // the Census Geocoding API (see convex/residency.ts).
+    resolvedDistrict: v.optional(
+      v.object({
+        districtName: v.string(),
+        county: v.optional(v.string()),
+        resolvedAt: v.number(),
+      })
+    ),
   }).index("by_clerk_id", ["clerkId"]),
 
   // Tenant record. Convex-native — no Clerk Organization behind this at all.
@@ -183,10 +193,42 @@ export default defineSchema({
     orgId: v.id("organizations"),
     teamId: v.id("teams"),
     playerId: v.id("players"),
+    // Audit trail for the league_admin residency-check override escape
+    // hatch (see convex/residency.ts / rosters.addToRoster).
+    overrideReason: v.optional(v.string()),
+    overriddenByClerkId: v.optional(v.string()),
   })
     .index("by_team", ["teamId"])
     .index("by_player", ["playerId"])
     .index("by_org_and_team", ["orgId", "teamId"]),
+
+  // District -> org-unit mapping for residency-based roster assignment.
+  // `municipality` disambiguates regional districts that serve multiple
+  // towns, each mapped to a different club/org-unit; lookup tries an exact
+  // (districtName, municipality) match first, then falls back to
+  // (districtName, municipality: undefined).
+  districtMappings: defineTable({
+    orgId: v.id("organizations"),
+    districtName: v.string(),
+    municipality: v.optional(v.string()),
+    orgUnitId: v.id("orgUnits"),
+  })
+    .index("by_org", ["orgId"])
+    .index("by_org_and_district", ["orgId", "districtName"]),
+
+  // Logged the first time a roster-add is blocked because the guardian's
+  // resolved district has no districtMappings row for this org — gives
+  // admins something concrete to review instead of a silent dead end.
+  unmappedDistrictReports: defineTable({
+    orgId: v.id("organizations"),
+    guardianClerkId: v.string(),
+    districtName: v.string(),
+    county: v.optional(v.string()),
+    reportedAt: v.number(),
+    resolved: v.boolean(),
+  })
+    .index("by_org", ["orgId"])
+    .index("by_org_and_resolved", ["orgId", "resolved"]),
 
   leagueSettings: defineTable({
     orgId: v.id("organizations"),

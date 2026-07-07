@@ -1,7 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
-import type { MutationCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { requireLeagueAdminMutation, requireLeagueAdminQuery } from "./lib/auth";
 
 export const listOrgUnits = query({
@@ -41,7 +41,7 @@ export const renameOrgUnit = mutation({
 });
 
 async function isDescendant(
-  ctx: MutationCtx,
+  ctx: MutationCtx | QueryCtx,
   candidateAncestorId: Id<"orgUnits">,
   nodeId: Id<"orgUnits">
 ): Promise<boolean> {
@@ -51,6 +51,22 @@ async function isDescendant(
     current = await ctx.db.get(current.parentUnitId);
   }
   return false;
+}
+
+/**
+ * Is `nodeId` the same unit as `ancestorId`, or nested somewhere under it?
+ * Shared ancestor-walk check reused by both the hierarchy-builder's
+ * cycle-prevention (below) and the residency enforcement in
+ * convex/residency.ts (a team's org-unit must be the mapped district's unit
+ * or a descendant of it).
+ */
+export async function isSelfOrDescendant(
+  ctx: MutationCtx | QueryCtx,
+  ancestorId: Id<"orgUnits">,
+  nodeId: Id<"orgUnits">
+): Promise<boolean> {
+  if (ancestorId === nodeId) return true;
+  return isDescendant(ctx, ancestorId, nodeId);
 }
 
 export const moveOrgUnit = mutation({
