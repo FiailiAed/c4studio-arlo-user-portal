@@ -26,13 +26,16 @@ export default function AdminTeamsPage() {
   const { activeOrgId } = useActiveOrg();
   const teams = useQuery(api.teams.listTeams, activeOrgId ? { orgId: activeOrgId } : "skip");
   const clubs = useQuery(api.clubs.listClubs, activeOrgId ? { orgId: activeOrgId } : "skip");
+  const orgUnits = useQuery(api.orgUnits.listOrgUnits, activeOrgId ? { orgId: activeOrgId } : "skip");
   const createTeam = useMutation(api.teams.createTeam);
   const renameTeam = useMutation(api.teams.renameTeam);
   const deleteTeam = useMutation(api.teams.deleteTeam);
   const assignTeamToClub = useMutation(api.teams.assignTeamToClub);
+  const assignTeamOrgUnit = useMutation(api.teams.assignTeamOrgUnit);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
+  const [orgUnitId, setOrgUnitId] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
 
   const [renameDrafts, setRenameDrafts] = useState<Record<string, string>>({});
@@ -41,7 +44,7 @@ export default function AdminTeamsPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
-  if (teams === undefined || clubs === undefined) {
+  if (teams === undefined || clubs === undefined || orgUnits === undefined) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <ArloLoader />
@@ -50,12 +53,17 @@ export default function AdminTeamsPage() {
   }
 
   async function handleCreate() {
-    if (!name.trim() || !activeOrgId) return;
+    if (!name.trim() || !activeOrgId || !orgUnitId) return;
     setSubmitting(true);
     try {
-      await createTeam({ orgId: activeOrgId, name: name.trim() });
+      await createTeam({
+        orgId: activeOrgId,
+        name: name.trim(),
+        orgUnitId: orgUnitId as Id<"orgUnits">,
+      });
       setCreateOpen(false);
       setName("");
+      setOrgUnitId("");
     } finally {
       setSubmitting(false);
     }
@@ -88,6 +96,11 @@ export default function AdminTeamsPage() {
     await assignTeamToClub({ teamId, clubId: clubId ? (clubId as Id<"clubs">) : undefined });
   }
 
+  async function handleOrgUnitChange(teamId: Id<"teams">, newOrgUnitId: string) {
+    if (!newOrgUnitId) return;
+    await assignTeamOrgUnit({ teamId, orgUnitId: newOrgUnitId as Id<"orgUnits"> });
+  }
+
   const columns: DataTableColumn<Doc<"teams">>[] = [
     {
       key: "name",
@@ -113,6 +126,26 @@ export default function AdminTeamsPage() {
           <option value="">No club</option>
           {clubs?.map((club) => (
             <option key={club._id} value={club._id}>{club.name}</option>
+          ))}
+        </select>
+      ),
+    },
+    {
+      key: "orgUnit",
+      header: "Org Unit",
+      render: (team) => (
+        <select
+          value={team.orgUnitId ?? ""}
+          onChange={(e) => handleOrgUnitChange(team._id, e.target.value)}
+          className={cn(SELECT_CLASSNAME)}
+        >
+          <option value="" disabled>
+            Select org unit
+          </option>
+          {orgUnits?.map((unit) => (
+            <option key={unit._id} value={unit._id}>
+              {`${unit.unitType}: ${unit.name}`}
+            </option>
           ))}
         </select>
       ),
@@ -151,11 +184,26 @@ export default function AdminTeamsPage() {
             <label className="text-sm font-medium">Team name</label>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Eagles" />
           </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Org Unit</label>
+            <select
+              value={orgUnitId}
+              onChange={(e) => setOrgUnitId(e.target.value)}
+              className={cn(SELECT_CLASSNAME, "w-full")}
+            >
+              <option value="">Select org unit…</option>
+              {orgUnits?.map((unit) => (
+                <option key={unit._id} value={unit._id}>
+                  {`${unit.unitType}: ${unit.name}`}
+                </option>
+              ))}
+            </select>
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={submitting}>
               Cancel
             </Button>
-            <Button onClick={handleCreate} disabled={submitting || !name.trim()}>
+            <Button onClick={handleCreate} disabled={submitting || !name.trim() || !orgUnitId}>
               {submitting ? "Creating…" : "Create Team"}
             </Button>
           </DialogFooter>

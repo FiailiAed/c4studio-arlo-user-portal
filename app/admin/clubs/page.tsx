@@ -30,13 +30,16 @@ export default function AdminClubsPage() {
   const { activeOrgId } = useActiveOrg();
   const clubs = useQuery(api.clubs.listClubs, activeOrgId ? { orgId: activeOrgId } : "skip");
   const coaches = useQuery(api.clubs.listCoaches, activeOrgId ? { orgId: activeOrgId } : "skip");
+  const orgUnits = useQuery(api.orgUnits.listOrgUnits, activeOrgId ? { orgId: activeOrgId } : "skip");
   const createClub = useMutation(api.clubs.createClub);
   const renameClub = useMutation(api.clubs.renameClub);
   const assignCoach = useMutation(api.clubs.assignCoach);
+  const assignClubOrgUnit = useMutation(api.clubs.assignClubOrgUnit);
   const deleteClub = useMutation(api.clubs.deleteClub);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
+  const [orgUnitId, setOrgUnitId] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
 
   const [renameDrafts, setRenameDrafts] = useState<Record<string, string>>({});
@@ -49,7 +52,7 @@ export default function AdminClubsPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
-  if (clubs === undefined || coaches === undefined) {
+  if (clubs === undefined || coaches === undefined || orgUnits === undefined) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <ArloLoader />
@@ -58,15 +61,25 @@ export default function AdminClubsPage() {
   }
 
   async function handleCreate() {
-    if (!name.trim() || !activeOrgId) return;
+    if (!name.trim() || !activeOrgId || !orgUnitId) return;
     setSubmitting(true);
     try {
-      await createClub({ orgId: activeOrgId, name: name.trim() });
+      await createClub({
+        orgId: activeOrgId,
+        name: name.trim(),
+        orgUnitId: orgUnitId as Id<"orgUnits">,
+      });
       setCreateOpen(false);
       setName("");
+      setOrgUnitId("");
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function handleOrgUnitChange(clubId: Id<"clubs">, newOrgUnitId: string) {
+    if (!newOrgUnitId) return;
+    await assignClubOrgUnit({ clubId, orgUnitId: newOrgUnitId as Id<"orgUnits"> });
   }
 
   async function commitRename(clubId: Id<"clubs">) {
@@ -131,6 +144,31 @@ export default function AdminClubsPage() {
           <Badge variant="outline" className="text-muted-foreground">Unassigned</Badge>
         ),
     },
+    {
+      key: "orgUnit",
+      header: "Org Unit",
+      render: (club) => (
+        <div className="flex items-center gap-2">
+          {!club.orgUnitId && (
+            <Badge variant="outline" className="text-muted-foreground">Unassigned</Badge>
+          )}
+          <select
+            value={club.orgUnitId ?? ""}
+            onChange={(e) => handleOrgUnitChange(club._id, e.target.value)}
+            className={cn(SELECT_CLASSNAME)}
+          >
+            <option value="" disabled>
+              Select org unit
+            </option>
+            {orgUnits?.map((unit) => (
+              <option key={unit._id} value={unit._id}>
+                {`${unit.unitType}: ${unit.name}`}
+              </option>
+            ))}
+          </select>
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -181,11 +219,26 @@ export default function AdminClubsPage() {
             <label className="text-sm font-medium">Club name</label>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Riverside Youth Lacrosse" />
           </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Org Unit</label>
+            <select
+              value={orgUnitId}
+              onChange={(e) => setOrgUnitId(e.target.value)}
+              className={cn(SELECT_CLASSNAME, "w-full")}
+            >
+              <option value="">Select org unit…</option>
+              {orgUnits?.map((unit) => (
+                <option key={unit._id} value={unit._id}>
+                  {`${unit.unitType}: ${unit.name}`}
+                </option>
+              ))}
+            </select>
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={submitting}>
               Cancel
             </Button>
-            <Button onClick={handleCreate} disabled={submitting || !name.trim()}>
+            <Button onClick={handleCreate} disabled={submitting || !name.trim() || !orgUnitId}>
               {submitting ? "Creating…" : "Create Club"}
             </Button>
           </DialogFooter>
