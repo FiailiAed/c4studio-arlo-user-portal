@@ -12,6 +12,26 @@ import type { Id } from "./_generated/dataModel";
 // Games occupy a fixed 2-hour slot on a field; no separate duration field yet.
 export const SLOT_MS = 2 * 60 * 60 * 1000;
 
+export async function hasFieldConflict(
+  ctx: QueryCtx,
+  orgId: string,
+  fieldId: Id<"fields">,
+  startTime: number,
+  excludeGameId?: Id<"games">
+): Promise<boolean> {
+  const gamesOnField = await ctx.db
+    .query("games")
+    .withIndex("by_org_and_field_and_time", (q) => q.eq("orgId", orgId).eq("fieldId", fieldId))
+    .collect();
+
+  return gamesOnField.some(
+    (game) =>
+      game._id !== excludeGameId &&
+      game.status !== "CANCELLED" &&
+      Math.abs(game.startTime - startTime) < SLOT_MS
+  );
+}
+
 async function assertNoFieldConflict(
   ctx: QueryCtx,
   orgId: string,
@@ -19,19 +39,9 @@ async function assertNoFieldConflict(
   startTime: number,
   excludeGameId?: Id<"games">
 ) {
-  const gamesOnField = await ctx.db
-    .query("games")
-    .withIndex("by_org_and_field_and_time", (q) => q.eq("orgId", orgId).eq("fieldId", fieldId))
-    .collect();
-
-  const conflict = gamesOnField.some(
-    (game) =>
-      game._id !== excludeGameId &&
-      game.status !== "CANCELLED" &&
-      Math.abs(game.startTime - startTime) < SLOT_MS
-  );
-
-  if (conflict) throw new Error("Field is already booked at this time");
+  if (await hasFieldConflict(ctx, orgId, fieldId, startTime, excludeGameId)) {
+    throw new Error("Field is already booked at this time");
+  }
 }
 
 export const listGames = query({

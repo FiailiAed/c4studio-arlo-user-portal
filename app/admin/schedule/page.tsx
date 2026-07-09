@@ -241,6 +241,9 @@ export default function AdminSchedulePage() {
             <Link href="/admin/schedule/teams" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
               Manage Teams
             </Link>
+            <Link href="/admin/schedule/bulk" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+              Bulk Schedule
+            </Link>
             <Button
               size="sm"
               onClick={() => setCreateOpen(true)}

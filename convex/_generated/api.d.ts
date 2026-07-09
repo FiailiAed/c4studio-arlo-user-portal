@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as bulkScheduling from "../bulkScheduling.js";
 import type * as clubs from "../clubs.js";
 import type * as coach from "../coach.js";
 import type * as customTables from "../customTables.js";
@@ -29,6 +30,7 @@ import type * as referees from "../referees.js";
 import type * as residency from "../residency.js";
 import type * as rosters from "../rosters.js";
 import type * as seasons from "../seasons.js";
+import type * as teamSeasonPlacements from "../teamSeasonPlacements.js";
 import type * as teams from "../teams.js";
 import type * as users from "../users.js";
 
@@ -39,6 +41,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  bulkScheduling: typeof bulkScheduling;
   clubs: typeof clubs;
   coach: typeof coach;
   customTables: typeof customTables;
@@ -60,6 +63,7 @@ declare const fullApi: ApiFromModules<{
   residency: typeof residency;
   rosters: typeof rosters;
   seasons: typeof seasons;
+  teamSeasonPlacements: typeof teamSeasonPlacements;
   teams: typeof teams;
   users: typeof users;
 }>;

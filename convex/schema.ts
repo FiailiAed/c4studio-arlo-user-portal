@@ -190,6 +190,21 @@ export default defineSchema({
     .index("by_player", ["playerId"])
     .index("by_org_and_team", ["orgId", "teamId"]),
 
+  // Which org unit a team belonged to for a *specific* season — decoupled
+  // from teams.orgUnitId (which is just a "current/default" convenience
+  // value used to prefill new placements, not authoritative for anything
+  // season-specific). This is what lets bulk scheduling ask "who was in
+  // Division X during Spring 2026" correctly even after a team moves
+  // divisions next season.
+  teamSeasonPlacements: defineTable({
+    orgId: v.string(),
+    seasonId: v.id("seasons"),
+    teamId: v.id("teams"),
+    orgUnitId: v.id("orgUnits"),
+  })
+    .index("by_org_and_season_and_orgUnit", ["orgId", "seasonId", "orgUnitId"])
+    .index("by_org_and_team_and_season", ["orgId", "teamId", "seasonId"]),
+
   // Per-org mapping from a Census school-district name to the org unit that
   // covers it. `municipality` disambiguates regional districts that serve
   // multiple towns mapped to different clubs — a row with no municipality is
